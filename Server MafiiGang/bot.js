@@ -384,7 +384,7 @@ async function performServerSetup(guild) {
   // ══════════════════════════════════════════════════════════════
 
   // Creeaza rolul "Verificat" daca nu exista
-  let verificatRole = guild.roles.cache.find(r => r.name === '✅ Verificat');
+  verificatRole = guild.roles.cache.find(r => r.name === '✅ Verificat');
   if (!verificatRole) {
     verificatRole = await guild.roles.create({
       name: '✅ Verificat',
