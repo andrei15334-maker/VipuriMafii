@@ -176,7 +176,17 @@ async function performServerSetup(guild) {
       reason: 'Sistem Avertismente Mafii'
     });
   }
-  
+
+  // Create/find "Verificat" role early so we can restrict channel access
+  let verificatRole = guild.roles.cache.find(r => r.name === '✅ Verificat');
+  if (!verificatRole) {
+    verificatRole = await guild.roles.create({
+      name: '✅ Verificat',
+      color: '#2ECC71',
+      reason: 'Sistem Verificare Identitate FiveM'
+    });
+  }
+
   // B. Create categories with premium styles
   // Category 1: Management Mafii (Hidden)
   let mgmtCategory = guild.channels.cache.find(c => (c.name === '📢 MANAGEMENT MAFII' || c.name === '📢 𝗠𝗔𝗡𝗔𝗚𝗘𝗠𝗘𝗡𝗧 𝗠𝗔𝗙𝗜𝗜') && c.type === ChannelType.GuildCategory);
@@ -235,13 +245,40 @@ async function performServerSetup(guild) {
     });
   }
   
+  // Permissions overwrites for the Factions Registration channel: visible ONLY to Verified users & Staff
+  const registrationOverwrites = [
+    {
+      id: guild.id, // @everyone
+      deny: [PermissionsBitField.Flags.ViewChannel] // Hide for unverified users
+    },
+    {
+      id: verificatRole.id,
+      allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.ReadMessageHistory],
+      deny: [PermissionsBitField.Flags.SendMessages] // Read-only for normal verified users (they only click buttons)
+    },
+    {
+      id: managerRole.id,
+      allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory]
+    },
+    {
+      id: managerStaffRole.id,
+      allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory]
+    }
+  ];
+
   // Setup Channel
   let setupChannel = guild.channels.cache.find(c => (c.name === 'înregistrare-mafii' || c.name === '📥│𝗶𝗻𝗿𝗲𝗴𝗶𝘀𝘁𝗿𝗮𝗿𝗲-𝗺𝗮𝗳𝗶𝗶') && c.type === ChannelType.GuildText);
   if (!setupChannel) {
     setupChannel = await guild.channels.create({
       name: '📥│𝗶𝗻𝗿𝗲𝗴𝗶𝘀𝘁𝗿𝗮𝗿𝗲-𝗺𝗮𝗳𝗶𝗶',
       type: ChannelType.GuildText,
-      parent: infoCategory.id
+      parent: infoCategory.id,
+      permissionOverwrites: registrationOverwrites
+    });
+  } else {
+    // If it already exists, force update the permission overwrites immediately
+    await setupChannel.permissionOverwrites.set(registrationOverwrites).catch(err => {
+      console.error('[DISCORD] Failed to update permission overwrites for setupChannel:', err.message);
     });
   }
 

@@ -51,25 +51,142 @@ const sanctionTypeEl = document.getElementById('sanction-type');
 document.addEventListener('DOMContentLoaded', async () => {
   setupNavigation();
   
-  const authenticated = await fetchCurrentUser();
-  if (authenticated) {
+  const authResult = await fetchCurrentUser();
+  if (authResult === true) {
+    applyRoleBasedUI();
     await fetchStats();
     await loadFactionsData();
     setupActions();
     setupSuperadminExtras();
+  } else if (authResult === 'denied') {
+    // Show access denied overlay - don't redirect
+    showAccessDenied();
   } else {
+    // Not logged in at all - go to login
     window.location.href = '/';
   }
 });
+
+// ════════════════════════════════════════════════════════════
+// ROLE-BASED UI VISIBILITY
+// ════════════════════════════════════════════════════════════
+function applyRoleBasedUI() {
+  const role = currentUser?.role; // superadmin | manager | leader | member
+
+  const menuFactions     = document.getElementById('menu-factions');      // tab-factions
+  const menuAllFactions  = document.getElementById('menu-all-factions');  // tab-all-factions
+  const menuOnline       = document.getElementById('menu-online-players'); // tab-online-players
+  const menuLogs         = document.getElementById('menu-logs');           // tab-logs
+  const menuSettings     = document.getElementById('menu-settings');       // tab-settings
+
+  // === MEMBER ===
+  // Poate vedea: Overview, Toate Factiunile, Jucatori Online
+  // NU poate vedea: Gestionare Factiuni, Loguri, Setari
+  if (role === 'member') {
+    if (menuFactions)    menuFactions.style.display    = 'none';
+    if (menuLogs)        menuLogs.style.display        = 'none';
+    if (menuSettings)    menuSettings.style.display    = 'none';
+    // Start on Overview tab instead of Factions
+    activateTab('tab-overview');
+    return;
+  }
+
+  // === LEADER ===
+  // Poate vedea: Overview, Gestionare Factiuni (propria factiune), Toate Factiunile, Jucatori Online
+  // NU poate vedea: Loguri, Setari
+  if (role === 'leader') {
+    if (menuLogs)        menuLogs.style.display        = 'none';
+    if (menuSettings)    menuSettings.style.display    = 'none';
+    return;
+  }
+
+  // === MANAGER ===
+  // Poate vedea: toate in afara de Setari (doar superadmin)
+  if (role === 'manager') {
+    if (menuSettings)    menuSettings.style.display    = 'none';
+    return;
+  }
+
+  // === SUPERADMIN ===
+  // Vede tot - settings se arata in setupSuperadminExtras
+}
+
+function activateTab(tabId) {
+  document.querySelectorAll('.nav-item[data-tab]').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  const navItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+  if (navItem) navItem.classList.add('active');
+  const pane = document.getElementById(tabId);
+  if (pane) pane.classList.add('active');
+  // Update header
+  const headers = {
+    'tab-overview':       ['Prezentare Generală',       'Statistici globale ale serverului Vipuri Roleplay.'],
+    'tab-all-factions':   ['Toate Facțiunile',           'Vizualizează toate mafiile și gang-urile înregistrate.'],
+    'tab-online-players': ['Jucători Online',            'Membrii conectați acum pe FiveM sau Dashboard.'],
+  };
+  if (headers[tabId] && pageHeaderTitleEl) {
+    pageHeaderTitleEl.innerText = headers[tabId][0];
+    pageHeaderSubEl.innerText   = headers[tabId][1];
+  }
+}
+
+function showAccessDenied() {
+  // Hide main layout
+  document.querySelector('.app-layout')?.style.setProperty('display', 'none');
+  
+  // Show access denied screen
+  const overlay = document.createElement('div');
+  overlay.id = 'access-denied-overlay';
+  overlay.style.cssText = `
+    position: fixed; inset: 0;
+    background: #0d0d1a;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 9999; gap: 20px;
+    font-family: 'Inter', sans-serif;
+  `;
+  overlay.innerHTML = `
+    <div style="font-size: 64px;">🚫</div>
+    <h1 style="color: #e74c3c; font-size: 2rem; margin: 0;">Acces Interzis</h1>
+    <p style="color: #a0a0b0; text-align: center; max-width: 420px; font-size: 1rem; line-height: 1.6;">
+      Nu ai niciun rol activ pe serverul de Discord (Manager Staff, Manager Mafii/Gang, Lider sau Membru al unei facțiuni înregistrate).
+      <br><br>Contactează un <strong style="color:#e74c3c">Manager Staff</strong> pentru acces.
+    </p>
+    <a href="/auth/logout" style="
+      background: #e74c3c; color: #fff;
+      padding: 12px 28px; border-radius: 8px;
+      text-decoration: none; font-size: 0.95rem;
+      font-weight: 600; margin-top: 8px;
+    ">🔓 Deconectare</a>
+  `;
+  document.body.appendChild(overlay);
+}
 
 // 2. Navigation Setup
 function setupNavigation() {
   const navItems = document.querySelectorAll('.nav-item[data-tab]');
   navItems.forEach(item => {
     item.addEventListener('click', async () => {
+      const tabId = item.getAttribute('data-tab');
+      const role  = currentUser?.role;
+
+      // Guard restricted tabs
+      const restrictedForMember = ['tab-factions', 'tab-logs', 'tab-settings'];
+      const restrictedForLeader = ['tab-logs', 'tab-settings'];
+      const restrictedForManager= ['tab-settings'];
+
+      let denied = false;
+      if (role === 'member'  && restrictedForMember.includes(tabId))  denied = true;
+      if (role === 'leader'  && restrictedForLeader.includes(tabId))  denied = true;
+      if (role === 'manager' && restrictedForManager.includes(tabId)) denied = true;
+
+      if (denied) {
+        showTabAccessDenied(tabId);
+        return;
+      }
+
       navItems.forEach(nav => nav.classList.remove('active'));
       item.classList.add('active');
-      const tabId = item.getAttribute('data-tab');
       document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
       document.getElementById(tabId)?.classList.add('active');
 
@@ -93,10 +210,47 @@ function setupNavigation() {
   });
 }
 
+function showTabAccessDenied(tabId) {
+  // Show a toast / inline denied message without redirecting
+  let toast = document.getElementById('tab-denied-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'tab-denied-toast';
+    toast.style.cssText = `
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      background: #e74c3c; color: #fff; padding: 12px 28px;
+      border-radius: 10px; font-weight: 600; font-size: .95rem;
+      z-index: 9999; box-shadow: 0 4px 24px rgba(0,0,0,.4);
+      opacity: 0; transition: opacity .3s;
+    `;
+    document.body.appendChild(toast);
+  }
+  const messages = {
+    'tab-factions': '🚫 Secțiunea "Gestionare Facțiuni" este disponibilă doar pentru Lideri și Manageri.',
+    'tab-logs':     '🚫 Logurile de activitate sunt disponibile doar pentru Manageri Staff.',
+    'tab-settings': '🚫 Setările sistemului sunt disponibile doar pentru Manageri Staff.',
+  };
+  toast.innerText = messages[tabId] || '🚫 Acces interzis.';
+  toast.style.opacity = '1';
+  clearTimeout(toast._timeout);
+  toast._timeout = setTimeout(() => { toast.style.opacity = '0'; }, 3500);
+}
+
 // 3. API calls
 async function fetchCurrentUser() {
   try {
     const response = await fetch('/api/me');
+    
+    if (response.status === 401) {
+      // Not logged in - redirect to login
+      return false;
+    }
+    
+    if (response.status === 403) {
+      // Logged in but no valid role - show access denied
+      return 'denied';
+    }
+    
     if (!response.ok) return false;
     
     currentUser = await response.json();
