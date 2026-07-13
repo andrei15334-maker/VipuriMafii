@@ -1,0 +1,62 @@
+{
+  "mafias": [
+    {
+      "id": "mafia_1783969842324",
+      "name": "mala suerte",
+      "type": "oficiala",
+      "roleId": "1526304839380762815",
+      "categoryId": "1526304843331928165",
+      "channels": {
+        "chat": "1526304844435034183",
+        "tasks": "1526304846674792618",
+        "sanctions": "1526304848524345414",
+        "voice": "1526304849946480832",
+        "arrows": "1526304852144029776"
+      },
+      "ownerId": "1084484231750758440",
+      "members": [
+        "1084484231750758440"
+      ],
+      "tasks": [],
+      "sanctions": [],
+      "arrows": [
+        {
+          "id": "arrow_1783969859734",
+          "name": "moe",
+          "discordId": "69",
+          "addedBy": "denis.ddl",
+          "createdAt": "13.07.2026"
+        }
+      ]
+    }
+  ],
+  "settings": {
+    "guildId": "1526274994353606726",
+    "managerStaffRoleId": "1526284875144102062",
+    "managerRoleId": "1526284876398203084",
+    "logsChannelId": "1526284888121151700",
+    "setupChannelId": "1526284890906169455",
+    "verificareChannelId": "1526304200844251167",
+    "verificatRoleId": "1526304199388692531",
+    "zoneCategoryId": "1526287631405678714",
+    "globalCategoryId": "1526287631405678714",
+    "globalAnnouncementsChannelId": "1526287633305829537",
+    "liderOficialaRoleId": "1526284877438124274",
+    "liderNeoficialaRoleId": "1526284878637961216",
+    "liderGangRoleId": "1526284880067956870"
+  },
+  "profiles": {
+    "811954484955709491": {
+      "ingameName": "Andrei",
+      "fivemId": "5",
+      "nickname": "Andrei | 5",
+      "verifiedAt": "13.07.2026"
+    },
+    "1084484231750758440": {
+      "ingameName": "eci",
+      "fivemId": "8",
+      "nickname": "eci | 8",
+      "verifiedAt": "13.07.2026"
+    }
+  }
+}

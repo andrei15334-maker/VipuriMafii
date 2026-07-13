@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Vipuri Roleplay Mafia Panel</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="dashboard-wrapper">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <img class="sidebar-logo" src="logo.png" alt="V" onerror="this.style.display='none'; document.getElementById('sidebar-text-logo').style.display='block';">
+        <div id="sidebar-text-logo" style="display: none; font-size: 2rem; font-weight: 900; color: #ff3333;">V</div>
+        <div>
+          <h2 class="sidebar-brand-name">VIPURI RP</h2>
+          <span class="sidebar-brand-sub">Mafia Panel</span>
+        </div>
+      </div>
+
+      <!-- User Profile Card -->
+      <div class="sidebar-user">
+        <img id="user-avatar" class="sidebar-user-avatar" src="" alt="Avatar">
+        <div class="sidebar-user-info">
+          <span id="user-username" class="sidebar-user-name">Membru</span>
+          <span id="user-role-badge" class="sidebar-user-role">Înregistrare...</span>
+        </div>
+      </div>
+
+      <!-- Navigation Menu -->
+      <nav class="sidebar-nav">
+        <div class="nav-item active" data-tab="tab-factions" id="menu-factions">
+          <span>⚔️</span> Gestionare Facțiuni
+        </div>
+        <div class="nav-item" data-tab="tab-all-factions" id="menu-all-factions">
+          <span>🏛️</span> Toate Facțiunile
+        </div>
+        <div class="nav-item" data-tab="tab-overview">
+          <span>📊</span> Prezentare Generală
+        </div>
+        <div class="nav-item" data-tab="tab-online-players" id="menu-online-players">
+          <span>🎮</span> Jucători Online
+        </div>
+        <div class="nav-item" data-tab="tab-logs" id="menu-logs">
+          <span>📰</span> Loguri Activitate
+        </div>
+        <div class="nav-item" data-tab="tab-settings" id="menu-settings" style="display: none;">
+          <span>⚙️</span> Setări Sistem
+        </div>
+        <a href="/auth/logout" class="nav-item logout-btn" style="margin-top: 15px;">
+          <span>🚪</span> Deconectare
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Header -->
+      <header class="header-container">
+        <div>
+          <h1 id="page-header-title" class="page-title">Gestionare Facțiuni</h1>
+          <p id="page-header-sub" class="page-subtitle">Administrează membrii, sarcinile și sancțiunile active.</p>
+        </div>
+        <div id="faction-header-badge"></div>
+      </header>
+
+      <!-- TAB 1: OVERVIEW PANE -->
+      <div id="tab-overview" class="tab-pane">
+        <!-- Statistics Grid -->
+        <div class="stats-grid">
+          <div class="stat-card glass-panel">
+            <div class="stat-info">
+              <span id="stat-mafias" class="stat-value">0</span>
+              <span class="stat-label">Facțiuni Active</span>
+            </div>
+            <span class="stat-icon">⚔️</span>
+          </div>
+
+          <div class="stat-card glass-panel">
+            <div class="stat-info">
+              <span id="stat-members" class="stat-value">0</span>
+              <span class="stat-label">Total Membrii</span>
+            </div>
+            <span class="stat-icon">👥</span>
+          </div>
+
+          <div class="stat-card glass-panel">
+            <div class="stat-info">
+              <span id="stat-sanctions" class="stat-value">0</span>
+              <span class="stat-label">Sancțiuni Active</span>
+            </div>
+            <span class="stat-icon">⚠️</span>
+          </div>
+
+          <div class="stat-card glass-panel">
+            <div class="stat-info">
+              <span id="stat-tasks" class="stat-value">0</span>
+              <span class="stat-label">Task-uri Alocate</span>
+            </div>
+            <span class="stat-icon">📋</span>
+          </div>
+        </div>
+
+        <!-- Welcome Panel -->
+        <div class="glass-panel" style="padding: 30px; margin-top: 20px;">
+          <h3 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 12px; color: #ff3333;">⚜️ MANAGEMENT INTERACTIV MAFII</h3>
+          <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px;">
+            Acest web panel permite administratorilor și liderilor de mafii să gestioneze eficient activitățile ilegale de pe serverul <strong>Vipuri Roleplay</strong>. 
+            Orice modificare făcută pe acest site se va sincroniza automat cu serverul de Discord al comunității!
+          </p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 20px; margin-top: 10px;">
+            <div>
+              <h4 style="font-weight: 600; margin-bottom: 8px;">👑 Pentru Lideri:</h4>
+              <ul style="color: var(--text-secondary); padding-left: 20px; line-height: 1.5; font-size: 0.9rem;">
+                <li>Adaugă și demite membri din panel (se modifică rolurile pe Discord).</li>
+                <li>Creează și controlează sarcinile (task-urile) zilnice ale membrilor tăi.</li>
+                <li>Urmărește în timp real punctele de sancțiune acumulate.</li>
+              </ul>
+            </div>
+            <div>
+              <h4 style="font-weight: 600; margin-bottom: 8px;">🛡️ Pentru Manageri / Staff:</h4>
+              <ul style="color: var(--text-secondary); padding-left: 20px; line-height: 1.5; font-size: 0.9rem;">
+                <li>Vizualizează starea tuturor mafiilor înregistrate.</li>
+                <li>Acordă sau șterge puncte de sancțiune direct de pe site.</li>
+                <li>Primește loguri pe Discord pentru fiecare acțiune.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: FACTIONS PANE -->
+      <div id="tab-factions" class="tab-pane active">
+        <!-- Faction Selector for Managers -->
+        <div id="manager-selector-wrapper" class="selector-container" style="display: none;">
+          <div class="glass-panel" style="padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 15px; flex-wrap: wrap; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; gap: 15px;">
+              <label for="faction-selector" style="font-weight: 600; font-size: 0.95rem;">Selectează Facțiunea de inspectat:</label>
+              <select id="faction-selector" class="input-field" style="margin-bottom: 0; width: 300px; padding: 8px 12px; background: rgba(0,0,0,0.3);">
+                <!-- Options loaded dynamically -->
+              </select>
+            </div>
+            
+            <div id="faction-admin-actions" style="display: flex; gap: 10px;">
+              <button id="edit-faction-btn" class="btn-sm" style="background: rgba(241, 196, 15, 0.15); color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.4); border-radius: 6px; padding: 8px 14px; font-weight: 600; cursor: pointer; transition: 0.2s;">✏️ Editează</button>
+              <button id="delete-faction-btn" class="btn-sm" style="background: rgba(231, 76, 60, 0.15); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.4); border-radius: 6px; padding: 8px 14px; font-weight: 600; cursor: pointer; transition: 0.2s;">🗑️ Șterge Facțiunea</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="faction-grid">
+          <!-- LEFT COLUMN: Members & Sanctions -->
+          <div style="display: flex; flex-direction: column; gap: 24px;">
+            <!-- Members Panel -->
+            <div class="glass-panel">
+              <div class="panel-header">
+                <h3 class="panel-title">👥 Membrii Facțiunii (<span id="member-count">0</span>)</h3>
+                <span id="faction-type-badge"></span>
+              </div>
+              <div class="panel-body">
+                <!-- Add Member Form (Leader/Manager only) with autocomplete search -->
+                <div id="add-member-form" class="form-row" style="display: none; margin-bottom: 20px; position: relative;">
+                  <div style="flex: 1; position: relative;">
+                    <input type="text" id="new-member-search" class="input-field" placeholder="Caută membru după nume Discord..." style="margin-bottom: 0; width: 100%;">
+                    <div id="new-member-autocomplete-list" class="glass-panel autocomplete-items" style="display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; z-index: 1001; background: rgba(18, 18, 24, 0.98); border: 1px solid rgba(255, 255, 255, 0.1); padding: 5px; border-radius: 6px; box-shadow: 0 10px 25px rgba(0,0,0,0.55);">
+                      <!-- Loaded dynamically -->
+                    </div>
+                  </div>
+                  <input type="hidden" id="new-member-id">
+                  <button id="add-member-btn" class="btn-action" disabled>Adaugă</button>
+                </div>
+                
+                <!-- Member List -->
+                <div id="members-list-container" class="member-list">
+                  <div class="empty-state">Nu sunt membri în această facțiune.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sanctions Panel -->
+            <div class="glass-panel">
+              <div class="panel-header">
+                <h3 class="panel-title">⚠️ Sancțiuni Facțiune</h3>
+                <span id="sanction-points-total" class="badge badge-oficiala" style="font-size: 0.85rem; letter-spacing: 0.5px;">WARN: 0/3 | AV: 0/2</span>
+              </div>
+              <div class="panel-body">
+                <!-- Add Sanction Form (Manager only) -->
+                <div id="add-sanction-form" class="glass-panel" style="background: rgba(255, 51, 51, 0.02); border-color: rgba(255, 51, 51, 0.15); padding: 15px; margin-bottom: 20px; display: none;">
+                  <h4 style="font-size: 0.9rem; font-weight: 700; color: #ff3333; margin-bottom: 12px; text-transform: uppercase;">🛡️ Acordă Avertisment / Sancțiune Facțiune</h4>
+                  <div class="form-row">
+                    <div class="form-group" style="flex: 2;">
+                      <label for="sanction-reason">Motiv Sancțiune</label>
+                      <input type="text" id="sanction-reason" class="input-field" placeholder="Ex: Neîndeplinire activitate / Comportament..." style="margin-bottom: 0;">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                      <label for="sanction-type">Tip Sancțiune</label>
+                      <select id="sanction-type" class="input-field" style="margin-bottom: 0;">
+                        <option value="av">AV (Avertisment - Max 2)</option>
+                        <option value="warn">WARN (Warn - Max 3)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button id="submit-sanction-btn" class="btn-action" style="width: 100%; margin-top: 12px;">Confirmă Sancțiunea</button>
+                </div>
+
+                <!-- Sanctions List -->
+                <div id="sanctions-list-container" class="sanction-list">
+                  <div class="empty-state">Această facțiune nu are nicio sancțiune activă. Felicitări!</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT COLUMN: Tasks -->
+          <div style="display: flex; flex-direction: column; gap: 24px;">
+            <!-- Tasks Panel -->
+            <div class="glass-panel">
+              <div class="panel-header">
+                <h3 class="panel-title">📋 Obiective & Sarcini</h3>
+              </div>
+              <div class="panel-body">
+                <!-- Add Task Form (Leader/Manager only) -->
+                <div id="add-task-form" class="glass-panel" style="background: rgba(52, 152, 219, 0.02); border-color: rgba(52, 152, 219, 0.15); padding: 15px; margin-bottom: 20px; display: none;">
+                  <h4 style="font-size: 0.9rem; font-weight: 700; color: #3498db; margin-bottom: 12px; text-transform: uppercase;">📋 Alocă un Task Nou</h4>
+                  <div class="form-group" style="margin-bottom: 10px;">
+                    <label for="task-title">Titlu Task</label>
+                    <input type="text" id="task-title" class="input-field" placeholder="Ex: Farm 50k materiale / Ședință duminică..." style="margin-bottom: 0;">
+                  </div>
+                  <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="task-desc">Descriere Detaliată</label>
+                    <input type="text" id="task-desc" class="input-field" placeholder="Scrie detalii despre ce trebuie făcut..." style="margin-bottom: 0;">
+                  </div>
+                  <button id="submit-task-btn" class="btn-action" style="width: 100%; background: #3498db; box-shadow: 0 4px 12px rgba(52, 152, 219, 0.2);">Trimiți Obiectivul</button>
+                </div>
+
+                <!-- Tasks List -->
+                <div id="tasks-list-container" class="task-list">
+                  <div class="empty-state">Nu sunt task-uri active alocate momentan.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Arrows Panel (Mafias only, hidden by default) -->
+            <div id="arrows-panel" class="glass-panel" style="display: none; margin-top: 24px;">
+              <div class="panel-header">
+                <h3 class="panel-title">🏹 Săgeți Oficiale (<span id="arrow-count">0</span>)</h3>
+              </div>
+              <div class="panel-body">
+                <div id="add-arrow-form" class="form-row" style="display: none; margin-bottom: 20px; gap: 10px;">
+                  <input type="text" id="new-arrow-name" class="input-field" placeholder="Nume săgeată..." style="margin-bottom: 0; flex: 1;">
+                  <input type="text" id="new-arrow-id" class="input-field" placeholder="ID Server FiveM..." style="margin-bottom: 0; flex: 1;">
+                  <button id="add-arrow-btn" class="btn-action">Adaugă</button>
+                </div>
+                
+                <!-- Arrows List -->
+                <div id="arrows-list-container" class="member-list">
+                  <div class="empty-state">Nicio săgeată înregistrată.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: ALL FACTIONS GRID -->
+      <div id="tab-all-factions" class="tab-pane">
+        <div id="all-factions-grid" class="factions-grid">
+          <div class="empty-state">Se încarcă facțiunile...</div>
+        </div>
+      </div>
+
+      <!-- TAB 4: ONLINE PLAYERS PANE -->
+      <div id="tab-online-players" class="tab-pane">
+        <div class="glass-panel" style="padding: 24px;">
+          <h3 style="font-weight: 700; font-size: 1.2rem; color: var(--accent-red); margin-bottom: 8px; text-transform: uppercase;">🎮 Jucători Online (FiveM)</h3>
+          <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 0.95rem;">
+            Membrii din mafiile înregistrate care sunt conectați în acest moment pe serverul FiveM sau pe panoul web.
+          </p>
+          <div id="online-players-list-container" class="member-list">
+            <div class="empty-state">Niciun membru conectat pe server în acest moment.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: AUDIT LOGS PANE -->
+      <div id="tab-logs" class="tab-pane">
+        <div class="glass-panel" style="padding: 24px;">
+          <h3 style="font-weight: 700; font-size: 1.2rem; color: var(--accent-red); margin-bottom: 8px; text-transform: uppercase;">📰 Loguri Activitate Sistem</h3>
+          <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 0.95rem;">
+            Urmărește acțiunile efectuate pe panel de către Manageri, Lideri sau evenimentele sistemului.
+          </p>
+          <div id="audit-logs-list-container" class="member-list" style="max-height: 500px; overflow-y: auto;">
+            <div class="empty-state">Fără activități înregistrate.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: SYSTEM SETTINGS PANE -->
+      <div id="tab-settings" class="tab-pane">
+        <div class="glass-panel" style="padding: 24px; max-width: 600px;">
+          <h3 style="font-weight: 700; font-size: 1.2rem; color: var(--accent-red); margin-bottom: 8px; text-transform: uppercase;">⚙️ Configurare Setări Sistem</h3>
+          <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 0.95rem;">
+            Setări globale pentru corelarea botului de Discord cu Serverul și Roleplay-ul.
+          </p>
+          
+          <div class="form-group" style="margin-bottom: 15px;">
+            <label for="settings-guild-id">ID Ghildă Discord (Guild ID)</label>
+            <input type="text" id="settings-guild-id" class="input-field" placeholder="Ex: 1526274994353606726">
+          </div>
+          
+          <div class="form-group" style="margin-bottom: 15px;">
+            <label for="settings-staff-role">ID Rol Super Admin (Manager Staff)</label>
+            <input type="text" id="settings-staff-role" class="input-field" placeholder="Ex: 1526284875144102062">
+          </div>
+          
+          <div class="form-group" style="margin-bottom: 15px;">
+            <label for="settings-manager-role">ID Rol Admin (Manager Mafii/Gang)</label>
+            <input type="text" id="settings-manager-role" class="input-field" placeholder="Ex: 1526284876398203084">
+          </div>
+          
+          <div class="form-group" style="margin-bottom: 15px;">
+            <label for="settings-logs-channel">ID Canal Loguri Discord</label>
+            <input type="text" id="settings-logs-channel" class="input-field" placeholder="Ex: 1526284880126939146">
+          </div>
+          
+          <div class="form-group" style="margin-bottom: 20px;">
+            <label for="settings-setup-channel">ID Canal Înregistrare (Setup Channel)</label>
+            <input type="text" id="settings-setup-channel" class="input-field" placeholder="Ex: 1526284878235308032">
+          </div>
+          
+          <button id="save-settings-btn" class="btn-action" style="width: 100%;">Salvează Setările</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ═══ FACTION DETAIL MODAL ═══ -->
+  <div id="faction-detail-modal" class="modal-overlay">
+    <div class="modal-box">
+      <button class="modal-close-btn" id="faction-modal-close">✕</button>
+
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;">
+        <div id="fdm-type-icon" style="font-size:2rem;">⚔️</div>
+        <div>
+          <div id="fdm-name" class="modal-title">Facțiune</div>
+          <div id="fdm-sub" class="modal-sub">—</div>
+        </div>
+        <span id="fdm-badge" class="badge" style="margin-left:auto;"></span>
+      </div>
+
+      <!-- Stats row -->
+      <div style="display:flex;gap:10px;margin-bottom:4px;">
+        <div class="fc-stat"><div class="fc-stat-num" id="fdm-members">0</div><div class="fc-stat-lbl">Membri</div></div>
+        <div class="fc-stat"><div class="fc-stat-num" id="fdm-warn">0/3</div><div class="fc-stat-lbl">WARN</div></div>
+        <div class="fc-stat"><div class="fc-stat-num" id="fdm-av">0/2</div><div class="fc-stat-lbl">AV</div></div>
+        <div class="fc-stat"><div class="fc-stat-num" id="fdm-tasks">0</div><div class="fc-stat-lbl">Task-uri</div></div>
+      </div>
+
+      <div class="modal-section-title">👥 Membri Înregistrați</div>
+      <div id="fdm-members-list"><div class="empty-state">Niciun membru.</div></div>
+
+      <div class="modal-section-title" id="fdm-arrows-section" style="display:none;">🏹 Săgeți Oficiale</div>
+      <div id="fdm-arrows-list"></div>
+    </div>
+  </div>
+
+  <!-- Member Sanction Modal -->
+  <div id="member-sanction-modal" class="glass-panel" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; padding: 25px; width: 90%; max-width: 400px; box-shadow: 0 0 35px rgba(0,0,0,0.85); border-color: var(--accent-red);">
+    <h4 style="font-weight: 700; color: #ff3333; margin-bottom: 12px; text-transform: uppercase; font-size: 1.1rem; letter-spacing: 0.5px;">⚠️ Sancționează Membru</h4>
+    <p id="sanction-member-name" style="font-size: 0.9rem; margin-bottom: 15px; color: var(--text-secondary);"></p>
+    
+    <div class="form-group" style="margin-bottom: 12px;">
+      <label for="member-sanction-reason">Motiv Avertisment</label>
+      <input type="text" id="member-sanction-reason" class="input-field" placeholder="Ex: Absență nemotivată / Comportament..." style="margin-bottom: 0;">
+    </div>
+    
+    <div class="form-group" style="margin-bottom: 20px;">
+      <label for="member-sanction-points">Puncte Avertisment (AV)</label>
+      <input type="number" id="member-sanction-points" class="input-field" value="1" min="1" max="3" style="margin-bottom: 0;">
+    </div>
+    
+    <div style="display: flex; gap: 10px;">
+      <button id="cancel-member-sanction-btn" class="btn-sm" style="background: rgba(255,255,255,0.05); color: #fff; flex: 1; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;">Renunță</button>
+      <button id="confirm-member-sanction-btn" class="btn-action" style="flex: 2; padding: 6px 12px; font-size: 0.85rem; border-radius: 6px;">Acordă AV</button>
+    </div>
+  </div>
+
+  <!-- Edit Faction Modal -->
+  <div id="edit-faction-modal" class="glass-panel" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; padding: 25px; width: 90%; max-width: 400px; box-shadow: 0 0 35px rgba(0,0,0,0.85); border-color: #f1c40f;">
+    <h4 style="font-weight: 700; color: #f1c40f; margin-bottom: 12px; text-transform: uppercase; font-size: 1.1rem; letter-spacing: 0.5px;">✏️ Editează Facțiunea</h4>
+    
+    <div class="form-group" style="margin-bottom: 12px;">
+      <label for="edit-faction-name">Nume Facțiune</label>
+      <input type="text" id="edit-faction-name" class="input-field" placeholder="Nume nou..." style="margin-bottom: 0;">
+    </div>
+    
+    <div class="form-group" style="margin-bottom: 12px;">
+      <label for="edit-faction-type">Tip Facțiune</label>
+      <select id="edit-faction-type" class="input-field" style="margin-bottom: 0; background: rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.1); color: #fff;">
+        <option value="oficiala">Oficială</option>
+        <option value="neoficiala">Neoficială</option>
+        <option value="gang">Gang / Organizație</option>
+      </select>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 20px;">
+      <label for="edit-faction-owner">Discord ID Lider (Owner)</label>
+      <input type="text" id="edit-faction-owner" class="input-field" placeholder="Discord User ID..." style="margin-bottom: 0;">
+    </div>
+    
+    <div style="display: flex; gap: 10px;">
+      <button id="cancel-edit-faction-btn" class="btn-sm" style="background: rgba(255,255,255,0.05); color: #fff; flex: 1; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;">Renunță</button>
+      <button id="confirm-edit-faction-btn" class="btn-action" style="flex: 2; padding: 6px 12px; font-size: 0.85rem; border-radius: 6px; background: #f1c40f; box-shadow: 0 4px 12px rgba(241,196,15,0.2);">Salvează</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
