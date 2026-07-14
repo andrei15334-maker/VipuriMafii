@@ -20,8 +20,9 @@ dotenv.config();
 
 const client = new Client({
   intents: [
-    GatewayIntentBits.Guilds
-    // GatewayIntentBits.GuildMembers — activeaza din: discord.com/developers > Bot > Privileged Gateway Intents > SERVER MEMBERS INTENT
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildPresences
   ],
   partials: [Partials.Channel, Partials.GuildMember, Partials.User]
 });
@@ -62,11 +63,240 @@ client.once('ready', async () => {
       } else {
         console.log(`[DISCORD] Serverul ${guild.name} este deja configurat.`);
       }
+
+      // Create/Ensure Faction Warning roles exist on startup
+      try {
+        const warningRolesSpecs = [
+          { name: '⚠️ Mafia AV 1/2', color: '#F1C40F' },
+          { name: '⚠️ Mafia AV 2/2', color: '#F1C40F' },
+          { name: '⚠️ Mafia Warn 1/3', color: '#E67E22' },
+          { name: '⚠️ Mafia Warn 2/3', color: '#E67E22' },
+          { name: '⚠️ Mafia Warn 3/3', color: '#E74C3C' },
+          { name: '⚠️ Gang AV 1/2', color: '#2ECC71' },
+          { name: '⚠️ Gang AV 2/2', color: '#2ECC71' },
+          { name: '⚠️ Gang Warn 1/3', color: '#3498DB' },
+          { name: '⚠️ Gang Warn 2/3', color: '#3498DB' },
+          { name: '⚠️ Gang Warn 3/3', color: '#9B59B6' }
+        ];
+
+        for (const roleSpec of warningRolesSpecs) {
+          let role = guild.roles.cache.find(r => r.name === roleSpec.name);
+          if (!role) {
+            await guild.roles.create({
+              name: roleSpec.name,
+              color: roleSpec.color,
+              reason: 'Sistem Avertismente Facțiuni'
+            }).catch(() => null);
+          }
+        }
+      } catch (roleErr) {
+        console.error('[DISCORD] Eroare la crearea rolurilor detaliate de avertisment pe startup:', roleErr.message);
+      }
+
+
+      // Loop through all existing mafias to ensure they have the new invoiri channel and their roles are hoisted
+      let updatedDb = false;
+      for (const mafia of db.mafias) {
+        // Ensure existing role is hoisted (displayed separately)
+        if (mafia.roleId) {
+          try {
+            const role = await guild.roles.fetch(mafia.roleId).catch(() => null);
+            if (role && !role.hoist) {
+              await role.setHoist(true, `Sincronizare afisare separata`).catch(() => null);
+              console.log(`[DISCORD] Rolul facțiunii ${mafia.name} a fost setat să se afișeze separat (hoist).`);
+            }
+          } catch (roleErr) {
+            console.error(`[DISCORD] Nu s-a putut face hoist pe rolul ${mafia.name}:`, roleErr.message);
+          }
+        }
+
+        if (!mafia.channels.invoiri) {
+          console.log(`[DISCORD] Creare canal invoiri lipsa pentru mafia existenta: ${mafia.name}...`);
+          try {
+            const category = await guild.channels.fetch(mafia.categoryId).catch(() => null);
+            if (category) {
+              const managerRoleId = db.settings.managerRoleId;
+              const managerStaffRoleId = db.settings.managerStaffRoleId;
+              
+              const overwrites = [
+                {
+                  id: guild.id, // @everyone
+                  deny: [PermissionsBitField.Flags.ViewChannel]
+                },
+                {
+                  id: mafia.roleId,
+                  allow: [
+                    PermissionsBitField.Flags.ViewChannel, 
+                    PermissionsBitField.Flags.SendMessages, 
+                    PermissionsBitField.Flags.ReadMessageHistory,
+                    PermissionsBitField.Flags.Connect,
+                    PermissionsBitField.Flags.Speak
+                  ]
+                }
+              ];
+              
+              if (managerRoleId) {
+                overwrites.push({
+                  id: managerRoleId,
+                  allow: [
+                    PermissionsBitField.Flags.ViewChannel,
+                    PermissionsBitField.Flags.SendMessages,
+                    PermissionsBitField.Flags.ReadMessageHistory,
+                    PermissionsBitField.Flags.ManageChannels,
+                    PermissionsBitField.Flags.ManageMessages
+                  ]
+                });
+              }
+              if (managerStaffRoleId) {
+                overwrites.push({
+                  id: managerStaffRoleId,
+                  allow: [
+                    PermissionsBitField.Flags.ViewChannel,
+                    PermissionsBitField.Flags.SendMessages,
+                    PermissionsBitField.Flags.ReadMessageHistory,
+                    PermissionsBitField.Flags.ManageChannels,
+                    PermissionsBitField.Flags.ManageMessages
+                  ]
+                });
+              }
+              
+              const cleanName = mafia.name.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+              const invoiriChannel = await guild.channels.create({
+                name: `📝│𝗶𝗻𝘃𝗼𝗶𝗿𝗶-${cleanName.toLowerCase().replace(/ /g, '-')}`,
+                type: ChannelType.GuildText,
+                parent: category.id,
+                permissionOverwrites: overwrites
+              });
+              
+              mafia.channels.invoiri = invoiriChannel.id;
+              updatedDb = true;
+              console.log(`[DISCORD] Canal invoiri creat cu succes pentru ${mafia.name}!`);
+            }
+          } catch (createErr) {
+            console.error(`[DISCORD] Nu s-a putut crea canalul de invoiri pentru mafia ${mafia.name}:`, createErr.message);
+          }
+        }
+      }
+      
+      if (updatedDb) {
+        writeDb(db);
+      }
+
+      // Startup Sync: Sync Faction Members with Discord Roles
+      try {
+        console.log('[DISCORD] Se realizează sincronizarea membrilor facțiunilor cu Discord...');
+        let dbChanged = false;
+        
+        // Fetch all members to ensure cache is populated
+        await guild.members.fetch().catch(() => null);
+
+        db.mafias.forEach(mafia => {
+          if (!mafia.roleId) return;
+          
+          // Get all members who have this role on Discord
+          const roleMembers = guild.members.cache
+            .filter(m => m.roles.cache.has(mafia.roleId))
+            .map(m => m.id);
+            
+          // Merge with owner and co-leaders to make sure they are included
+          const desiredMembers = Array.from(new Set([
+            ...roleMembers,
+            mafia.ownerId,
+            ...(mafia.coLeaders || [])
+          ].filter(Boolean)));
+          
+          // Check if they are different
+          const currentSet = new Set(mafia.members || []);
+          const desiredSet = new Set(desiredMembers);
+          
+          let different = currentSet.size !== desiredSet.size;
+          if (!different) {
+            for (let mId of currentSet) {
+              if (!desiredSet.has(mId)) {
+                different = true;
+                break;
+              }
+            }
+          }
+          
+          if (different) {
+            mafia.members = desiredMembers;
+            dbChanged = true;
+            console.log(`[DISCORD STARTUP SYNC] Sincronizat membri pentru facțiunea ${mafia.name}. Membri noi: ${desiredMembers.length}`);
+          }
+        });
+        
+        if (dbChanged) {
+          writeDb(db);
+        }
+      } catch (syncErr) {
+        console.error('[DISCORD STARTUP SYNC] Eroare la sincronizare startup:', syncErr.message);
+      }
     }
   } catch (err) {
     console.error(`[DISCORD] Eroare la configurarea automată a serverului pe startup:`, err.message);
   }
 });
+
+// Real-time Discord role sync event listener
+client.on('guildMemberUpdate', async (oldMember, newMember) => {
+  try {
+    const db = readDb();
+    let dbChanged = false;
+    
+    // Check all mafias
+    db.mafias.forEach(mafia => {
+      if (!mafia.roleId) return;
+      
+      const hadRole = oldMember.roles.cache.has(mafia.roleId);
+      const hasRole = newMember.roles.cache.has(mafia.roleId);
+      
+      if (!hadRole && hasRole) {
+        // Role added
+        if (!mafia.members.includes(newMember.id)) {
+          mafia.members.push(newMember.id);
+          dbChanged = true;
+          console.log(`[DISCORD REALTIME SYNC] Membru adăugat: ${newMember.user.tag} (${newMember.id}) -> ${mafia.name}`);
+        }
+      } else if (hadRole && !hasRole) {
+        // Role removed
+        const idx = mafia.members.indexOf(newMember.id);
+        if (idx !== -1) {
+          mafia.members.splice(idx, 1);
+          dbChanged = true;
+          console.log(`[DISCORD REALTIME SYNC] Membru eliminat: ${newMember.user.tag} (${newMember.id}) <- ${mafia.name}`);
+        }
+      }
+    });
+    
+    if (dbChanged) {
+      writeDb(db);
+    }
+  } catch (err) {
+    console.error('[DISCORD REALTIME SYNC] Eroare in guildMemberUpdate:', err);
+  }
+});
+
+client.on('guildMemberRemove', async (member) => {
+  try {
+    const db = readDb();
+    let dbChanged = false;
+    db.mafias.forEach(mafia => {
+      const idx = mafia.members.indexOf(member.id);
+      if (idx !== -1) {
+        mafia.members.splice(idx, 1);
+        dbChanged = true;
+        console.log(`[DISCORD REALTIME SYNC] Membru plecat de pe server: ${member.user.tag} (${member.id}) <- ${mafia.name}`);
+      }
+    });
+    if (dbChanged) {
+      writeDb(db);
+    }
+  } catch (err) {
+    console.error('[DISCORD REALTIME SYNC] Eroare in guildMemberRemove:', err);
+  }
+});
+
 
 // Helper function to convert text to bold Unicode math sans-serif font
 function toBoldUnicode(text) {
@@ -476,9 +706,18 @@ async function performServerSetup(guild) {
 }
 
 // Event Handler for Slash Commands and Interactions
+client.on('error', (err) => {
+  console.error('[DISCORD CLIENT ERROR]', err.message || err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[UNHANDLED REJECTION]', reason?.message || reason);
+});
+
 client.on('interactionCreate', async (interaction) => {
   const db = readDb();
-  
+  try {
+
   // 1. Slash Commands
   if (interaction.isChatInputCommand()) {
     if (interaction.commandName === 'setup-server') {
@@ -498,6 +737,105 @@ client.on('interactionCreate', async (interaction) => {
   
   // 2. Button Interactions
   else if (interaction.isButton()) {
+    if (interaction.customId.startsWith('reply_ticket_')) {
+      const targetUserId = interaction.customId.replace('reply_ticket_', '');
+      
+      const modal = new ModalBuilder()
+        .setCustomId(`reply_modal_${targetUserId}`)
+        .setTitle('Răspunde la Tichet');
+
+      const responseInput = new TextInputBuilder()
+        .setCustomId('reply_text')
+        .setLabel('Răspunsul tău')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Scrie aici răspunsul sau rezolvarea problemei...')
+        .setRequired(true)
+        .setMinLength(5)
+        .setMaxLength(1000);
+
+      const actionRow = new ActionRowBuilder().addComponents(responseInput);
+      modal.addComponents(actionRow);
+
+      await interaction.showModal(modal);
+      return;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // BUTOANE ACCEPTARE/REFUZARE INVITATIE (DM INTERACTION)
+    // ══════════════════════════════════════════════════════════
+    if (interaction.customId.startsWith('invite:accept:') || interaction.customId.startsWith('invite:decline:')) {
+      const parts = interaction.customId.split(':'); // [invite, accept/decline, mafiaId, userId]
+      const action = parts[1];
+      const mafiaId = parts[2];
+      const userId = parts[3];
+
+      // Security check: only the invited user can click their DM buttons
+      if (interaction.user.id !== userId) {
+        return interaction.reply({ content: '❌ Nu poți interacționa cu această invitație.', ephemeral: true });
+      }
+
+      const mafia = db.mafias.find(m => m.id === mafiaId);
+      if (!mafia) {
+        return interaction.reply({ content: '❌ Această facțiune nu mai există în baza de date.', ephemeral: true });
+      }
+
+      if (action === 'accept') {
+        // Add member to mafia list in DB if they aren't already
+        if (!mafia.members.includes(userId)) {
+          mafia.members.push(userId);
+          writeDb(db);
+
+          // Give roles on Discord
+          try {
+            const guildId = db.settings.guildId || "1526274994353606726";
+            const guild = await client.guilds.fetch(guildId);
+            const member = await guild.members.fetch(userId);
+
+            // Add Faction Specific Role
+            await member.roles.add(mafia.roleId);
+
+            // Add Global Faction Role
+            const globalRoleId = "1526283703360163921";
+            await member.roles.add(globalRoleId).catch(() => null);
+
+            console.log(`[DISCORD] L-a adăugat pe ${member.user.tag} în facțiunea ${mafia.name} (invitație acceptată).`);
+          } catch (roleErr) {
+            console.error('[DISCORD] Eroare la acordarea rolurilor pe accept:', roleErr.message);
+          }
+        }
+
+        const acceptEmbed = new EmbedBuilder()
+          .setTitle('✅ INVITAȚIE ACCEPTATĂ')
+          .setDescription(`Ai acceptat invitația de a te alătura facțiunii **${mafia.name}**!\n\nAcum ai primit acces la canalele private pe Discord și în panel. Bun venit!`)
+          .setColor(0x2ECC71)
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [acceptEmbed] }).catch(() => null);
+
+        // Post log in global logging channel
+        await sendLogEmbed(
+          '👥 MEMBRU NOU (INVITAȚIE ACCEPTATĂ)',
+          `<@${userId}> a acceptat invitația și s-a alăturat facțiunii **${mafia.name}**!`,
+          '#2ECC71'
+        );
+      } else {
+        const declineEmbed = new EmbedBuilder()
+          .setTitle('❌ INVITAȚIE REFUZATĂ')
+          .setDescription(`Ai refuzat invitația de a te alătura facțiunii **${mafia.name}**.`)
+          .setColor(0xE74C3C)
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [declineEmbed] }).catch(() => null);
+
+        // Post log in global logging channel
+        await sendLogEmbed(
+          '❌ INVITAȚIE REFUZATĂ',
+          `<@${userId}> a refuzat invitația de a se alătura facțiunii **${mafia.name}**.`,
+          '#E74C3C'
+        );
+      }
+      return;
+    }
 
     // ══════════════════════════════════════════════════════════
     // BUTON VERIFICARE IDENTITATE
@@ -631,17 +969,17 @@ client.on('interactionCreate', async (interaction) => {
         
       const nameInput = new TextInputBuilder()
         .setCustomId('arrow_name')
-        .setLabel('Numele Săgeții (exact cum apare in-game)')
+        .setLabel('Numele Săgeții')
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder('Ex: Andrei Ionescu')
+        .setPlaceholder('Andrei Ionescu')
         .setRequired(true)
         .setMaxLength(50);
         
       const idInput = new TextInputBuilder()
         .setCustomId('arrow_fivem_id')
-        .setLabel('ID-ul Săgeții pe serverul FiveM')
+        .setLabel('ID-ul Săgeții (numărul din joc)')
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder('Ex: 5933  (numărul din joc, nu Discord ID!)')
+        .setPlaceholder('5933')
         .setRequired(true)
         .setMaxLength(10);
         
@@ -777,6 +1115,60 @@ client.on('interactionCreate', async (interaction) => {
   }
   
   else if (interaction.isModalSubmit()) {
+    if (interaction.customId.startsWith('reply_modal_')) {
+      const targetUserId = interaction.customId.replace('reply_modal_', '');
+      const replyText = interaction.fields.getTextInputValue('reply_text');
+      
+      try {
+        const targetGuildId = db.settings.guildId || "1526274994353606726";
+        const guild = client.guilds.cache.get(targetGuildId) || await client.guilds.fetch(targetGuildId).catch(() => null);
+        
+        let targetMember = null;
+        if (guild) {
+          targetMember = await guild.members.fetch(targetUserId).catch(() => null);
+        }
+        
+        const targetUser = targetMember ? targetMember.user : await client.users.fetch(targetUserId).catch(() => null);
+
+        if (!targetUser) {
+          return interaction.reply({ 
+            content: `❌ Nu s-a putut găsi utilizatorul cu ID-ul \`${targetUserId}\` pe Discord.\n> Este posibil că a introdus un ID greșit în formular, sau a plecat de pe server.`, 
+            ephemeral: true 
+          });
+        }
+
+        const embed = new EmbedBuilder()
+          .setTitle('📬 Ai primit un răspuns de la Staff!')
+          .setDescription(
+            `Solicitarea ta de asistență a primit un răspuns.\n\n` +
+            `👤 **Răspuns oferit de:** ${interaction.user.tag}\n\n` +
+            `💬 **Mesaj:**\n> ${replyText.split('\n').join('\n> ')}\n\n` +
+            `*Dacă mai ai nelămuriri, poți trimite un nou tichet de pe panel.*`
+          )
+          .setColor(0x2ECC71)
+          .setFooter({ text: 'Mafii/Gang Panel — Suport Staff' })
+          .setTimestamp();
+
+        if (targetMember) {
+          await targetMember.send({ embeds: [embed] });
+        } else {
+          await targetUser.send({ embeds: [embed] });
+        }
+
+        await interaction.reply({ 
+          content: `✅ Răspunsul a fost trimis cu succes în privat către **${targetUser.tag}** (<@${targetUserId}>)!`, 
+          ephemeral: true 
+        });
+      } catch (err) {
+
+        console.error('[REPLY TICKET]', err);
+        await interaction.reply({ 
+          content: `❌ Trimiterea a eșuat. Utilizatorul \`${targetUserId}\` probabil are DM-urile închise sau nu este pe server.\n> **Eroare:** ${err.message}`, 
+          ephemeral: true 
+        });
+      }
+      return;
+    }
 
     // ══════════════════════════════════════════════════════════
     // MODAL VERIFICARE IDENTITATE
@@ -1052,6 +1444,7 @@ client.on('interactionCreate', async (interaction) => {
         const mafiaRole = await guild.roles.create({
           name: `${rolePrefix}${mafiaName}`,
           color: roleColor,
+          hoist: true,
           reason: `Creare mafie: ${mafiaName}`
         });
         
@@ -1171,6 +1564,72 @@ client.on('interactionCreate', async (interaction) => {
           parent: category.id,
           permissionOverwrites: overwrites
         });
+
+        // ── Canal CHAT LIDERI — acces doar Lider + Co-Lider + Manageri ──
+        const coLiderRoleIdMap = {
+          'oficiala':   db.settings.coLiderOficialaRoleId,
+          'neoficiala': db.settings.coLiderNeoficialaRoleId,
+          'gang':       db.settings.coLiderGangRoleId
+        };
+        const liderRoleId = leaderRoleIdMap[type];
+        const coLiderRoleId = coLiderRoleIdMap[type];
+
+        const chatLideriOverwrites = [
+          {
+            id: guild.id, // @everyone — acces interzis
+            deny: [PermissionsBitField.Flags.ViewChannel]
+          }
+        ];
+        // Adauga Lider
+        if (liderRoleId) {
+          chatLideriOverwrites.push({
+            id: liderRoleId,
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.SendMessages,
+              PermissionsBitField.Flags.ReadMessageHistory
+            ]
+          });
+        }
+        // Adauga Co-Lider
+        if (coLiderRoleId) {
+          chatLideriOverwrites.push({
+            id: coLiderRoleId,
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.SendMessages,
+              PermissionsBitField.Flags.ReadMessageHistory
+            ]
+          });
+        }
+        // Adauga Manager si Manager Staff
+        if (managerRoleId) {
+          chatLideriOverwrites.push({
+            id: managerRoleId,
+            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory]
+          });
+        }
+        if (db.settings.managerStaffRoleId) {
+          chatLideriOverwrites.push({
+            id: db.settings.managerStaffRoleId,
+            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory]
+          });
+        }
+
+        const chatLideriChannel = await guild.channels.create({
+          name: `👑│𝗰𝗵𝗮𝘁-𝗹𝗶𝗱𝗲𝗿𝗶`,
+          type: ChannelType.GuildText,
+          parent: category.id,
+          permissionOverwrites: chatLideriOverwrites
+        });
+
+        // ── Canal INVOIRI — vizibil pentru toti membrii mafiei si staff ──
+        const invoiriChannel = await guild.channels.create({
+          name: `📝│𝗶𝗻𝘃𝗼𝗶𝗿𝗶-${cleanName.toLowerCase().replace(/ /g, '-')}`,
+          type: ChannelType.GuildText,
+          parent: category.id,
+          permissionOverwrites: overwrites
+        });
         
         let arrowsChannelId = null;
         if (type !== 'gang') {
@@ -1242,7 +1701,8 @@ client.on('interactionCreate', async (interaction) => {
             tasks: tasksChannel.id,
             sanctions: sanctionsChannel.id,
             voice: voiceChannel.id,
-            arrows: arrowsChannelId
+            arrows: arrowsChannelId,
+            invoiri: invoiriChannel.id
           },
           ownerId: interaction.user.id,
           members: [interaction.user.id],
@@ -1278,6 +1738,13 @@ client.on('interactionCreate', async (interaction) => {
         console.error('[DISCORD] Eroare la crearea mafiei:', err);
         await interaction.editReply({ content: '❌ A apărut o eroare la crearea canalelor sau rolurilor. Verifică permisiunile botului.' });
       }
+    }
+  }
+  } catch (err) {
+    if (err?.code === 10062) {
+      console.warn('[DISCORD] Interacțiune expirată (10062) - ignorată.');
+    } else {
+      console.error('[DISCORD] Eroare neașteptată în interacțiune:', err?.message || err);
     }
   }
 });
@@ -1471,6 +1938,11 @@ async function updateDiscordFaction(roleId, categoryId, channels, oldName, newNa
       const arrowsChan = await guild.channels.fetch(channels.arrows).catch(() => null);
       if (arrowsChan) await arrowsChan.setName(`🏹│𝘀𝗮𝗴𝗲𝘁𝗶-𝗼𝗳𝗶𝗰𝗶𝗮𝗹𝗲`);
     }
+    if (channels.invoiri) {
+      const invoiriChan = await guild.channels.fetch(channels.invoiri).catch(() => null);
+      if (invoiriChan) await invoiriChan.setName(`📝│𝗶𝗻𝘃𝗼𝗶𝗿𝗶-${cleanNameLower}`);
+    }
+
 
     // Handle gang <-> mafia transition for arrows channel
     if (newType !== 'gang' && !channels.arrows) {
@@ -1544,6 +2016,11 @@ async function deleteDiscordFaction(roleId, categoryId, channels) {
       const arrowsChan = await guild.channels.fetch(channels.arrows).catch(() => null);
       if (arrowsChan) await arrowsChan.delete().catch(() => null);
     }
+    if (channels.invoiri) {
+      const invoiriChan = await guild.channels.fetch(channels.invoiri).catch(() => null);
+      if (invoiriChan) await invoiriChan.delete().catch(() => null);
+    }
+
     
     // Delete Category
     const category = await guild.channels.fetch(categoryId).catch(() => null);
@@ -1597,6 +2074,208 @@ async function syncDiscordLeader(oldLeaderId, newLeaderId, factionType) {
   }
 }
 
+// Helper to sync faction-level warnings to the leader
+async function syncFactionWarningRoles(mafiaId) {
+  const db = readDb();
+  const mafia = db.mafias.find(m => m.id === mafiaId);
+  if (!mafia) return false;
+  
+  const guildId = db.settings.guildId || "1526274994353606726";
+  try {
+    const guild = await client.guilds.fetch(guildId);
+    
+    // Fetch faction leader (owner)
+    const leaderMember = await guild.members.fetch(mafia.ownerId).catch(() => null);
+    if (!leaderMember) {
+      console.warn(`[DISCORD] Liderul ${mafia.ownerId} nu a fost gasit in guild pentru sync sanctiuni.`);
+      return false;
+    }
+    
+    // Fetch all 10 roles dynamically by name
+    const rolesMap = {
+      mafiaAv1: guild.roles.cache.find(r => r.name === '⚠️ Mafia AV 1/2'),
+      mafiaAv2: guild.roles.cache.find(r => r.name === '⚠️ Mafia AV 2/2'),
+      mafiaWarn1: guild.roles.cache.find(r => r.name === '⚠️ Mafia Warn 1/3'),
+      mafiaWarn2: guild.roles.cache.find(r => r.name === '⚠️ Mafia Warn 2/3'),
+      mafiaWarn3: guild.roles.cache.find(r => r.name === '⚠️ Mafia Warn 3/3'),
+      gangAv1: guild.roles.cache.find(r => r.name === '⚠️ Gang AV 1/2'),
+      gangAv2: guild.roles.cache.find(r => r.name === '⚠️ Gang AV 2/2'),
+      gangWarn1: guild.roles.cache.find(r => r.name === '⚠️ Gang Warn 1/3'),
+      gangWarn2: guild.roles.cache.find(r => r.name === '⚠️ Gang Warn 2/3'),
+      gangWarn3: guild.roles.cache.find(r => r.name === '⚠️ Gang Warn 3/3')
+    };
+
+    const isGang = mafia.type === 'gang';
+
+    // Helper to toggle a single role on the member
+    const toggleRole = async (role, shouldHave) => {
+      if (!role) return;
+      try {
+        if (shouldHave) {
+          if (!leaderMember.roles.cache.has(role.id)) {
+            await leaderMember.roles.add(role.id);
+          }
+        } else {
+          if (leaderMember.roles.cache.has(role.id)) {
+            await leaderMember.roles.remove(role.id);
+          }
+        }
+      } catch (err) {
+        console.error(`[DISCORD] Failed to toggle role ${role.name} on member ${leaderMember.user.tag}:`, err.message);
+      }
+    };
+    
+    if (isGang) {
+      // Gang AV roles
+      await toggleRole(rolesMap.gangAv1, mafia.warningsAV === 1);
+      await toggleRole(rolesMap.gangAv2, mafia.warningsAV === 2);
+      
+      // Gang Warn roles
+      await toggleRole(rolesMap.gangWarn1, mafia.warningsWarn === 1);
+      await toggleRole(rolesMap.gangWarn2, mafia.warningsWarn === 2);
+      await toggleRole(rolesMap.gangWarn3, mafia.warningsWarn >= 3);
+      
+      // Remove all Mafia warning roles
+      await toggleRole(rolesMap.mafiaAv1, false);
+      await toggleRole(rolesMap.mafiaAv2, false);
+      await toggleRole(rolesMap.mafiaWarn1, false);
+      await toggleRole(rolesMap.mafiaWarn2, false);
+      await toggleRole(rolesMap.mafiaWarn3, false);
+      
+    } else {
+      // Mafia AV roles
+      await toggleRole(rolesMap.mafiaAv1, mafia.warningsAV === 1);
+      await toggleRole(rolesMap.mafiaAv2, mafia.warningsAV === 2);
+      
+      // Mafia Warn roles
+      await toggleRole(rolesMap.mafiaWarn1, mafia.warningsWarn === 1);
+      await toggleRole(rolesMap.mafiaWarn2, mafia.warningsWarn === 2);
+      await toggleRole(rolesMap.mafiaWarn3, mafia.warningsWarn >= 3);
+      
+      // Remove all Gang warning roles
+      await toggleRole(rolesMap.gangAv1, false);
+      await toggleRole(rolesMap.gangAv2, false);
+      await toggleRole(rolesMap.gangWarn1, false);
+      await toggleRole(rolesMap.gangWarn2, false);
+      await toggleRole(rolesMap.gangWarn3, false);
+    }
+    
+    console.log(`[DISCORD] Sincronizat roluri avertismente detaliate pentru liderul facțiunii ${mafia.name} (AV: ${mafia.warningsAV}, WARN: ${mafia.warningsWarn})`);
+    return true;
+  } catch (err) {
+    console.error(`[DISCORD] Eroare la sincronizarea rolurilor de sanctiune detaliate pentru liderul facțiunii ${mafiaId}:`, err);
+    return false;
+  }
+}
+
+// Helper to send invite DM on Discord
+async function sendInviteDM(userId, mafiaId, mafiaName) {
+  const db = readDb();
+  const guildId = db.settings.guildId || "1526274994353606726";
+  try {
+    const guild = await client.guilds.fetch(guildId);
+    const member = await guild.members.fetch(userId).catch(() => null);
+    if (!member) {
+      console.warn(`[DISCORD] Membrul ${userId} nu a fost gasit in guild pentru a trimite invitatia.`);
+      return false;
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle('✉️ INVITAȚIE ÎN FACȚIUNE')
+      .setDescription(`Salutare! Ai fost invitat să te alături facțiunii **${mafiaName}** de pe serverul **Vipuri Roleplay**.\n\nAlege una dintre opțiunile de mai jos pentru a accepta sau refuza invitația:`)
+      .setColor(0xF1C40F)
+      .setTimestamp();
+
+    const buttons = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`invite:accept:${mafiaId}:${userId}`)
+        .setLabel('Acceptă Invitația')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('✅'),
+      new ButtonBuilder()
+        .setCustomId(`invite:decline:${mafiaId}:${userId}`)
+        .setLabel('Refuză Invitația')
+        .setStyle(ButtonStyle.Danger)
+        .setEmoji('❌')
+
+    );
+
+    await member.send({ embeds: [embed], components: [buttons] });
+    console.log(`[DISCORD] Trimis invitatie DM catre ${member.user.tag} pentru mafia ${mafiaName}.`);
+    return true;
+  } catch (err) {
+    console.error(`[DISCORD] Eroare la trimiterea invitatiei DM catre ${userId}:`, err.message);
+    return false;
+  }
+}
+
+async function sendSupportTicketToAdmin(adminId, adminName, type, userName, userId, details) {
+  try {
+    const adminUser = await client.users.fetch(adminId).catch(() => null);
+    if (!adminUser) {
+      console.warn(`[DISCORD] Admin ${adminId} not found to send support ticket.`);
+      return false;
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🎫 TICHEȚ ASISTENȚĂ NOU — ${type.toUpperCase()}`)
+      .setDescription(
+        `Ai primit o solicitare de asistență de la un utilizator de pe site-ul de conectare.\n\n` +
+        `👤 **Nume Utilizator:** ${userName}\n` +
+        `🆔 **Discord ID:** ${userId}\n` +
+        `📝 **Detaliile Problemei:**\n${details}`
+      )
+      .setColor(0xE74C3C)
+      .setTimestamp();
+
+    const row = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(`reply_ticket_${userId}`)
+          .setLabel('Răspunde')
+          .setStyle(ButtonStyle.Success)
+          .setEmoji('📬')
+      );
+
+    await adminUser.send({ embeds: [embed], components: [row] });
+    return true;
+  } catch (err) {
+    console.error('Error sending support ticket to admin:', err);
+    return false;
+  }
+}
+
+async function getGuildMeta() {
+  const targetGuildId = "1526274994353606726";
+  try {
+    const guild = await client.guilds.fetch(targetGuildId);
+    if (!guild) return { roles: [], channels: [] };
+
+    // Fetch all roles and channels
+    const [rolesCollection, channelsCollection] = await Promise.all([
+      guild.roles.fetch(),
+      guild.channels.fetch()
+    ]);
+
+    const roles = rolesCollection
+      .filter(r => r.name !== '@everyone')
+      .sort((a, b) => b.position - a.position)
+      .map(r => ({ id: r.id, name: r.name, color: r.hexColor }))
+      .slice(0, 80);
+
+    const channels = channelsCollection
+      .filter(c => c && c.type === 0) // text channels only
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(c => ({ id: c.id, name: c.name }))
+      .slice(0, 100);
+
+    return { roles, channels };
+  } catch (err) {
+    console.error('[BOT] getGuildMeta error:', err);
+    return { roles: [], channels: [] };
+  }
+}
+
 module.exports = {
   client,
   modifyMemberRole,
@@ -1605,5 +2284,9 @@ module.exports = {
   sendChannelMessage,
   updateDiscordFaction,
   deleteDiscordFaction,
-  syncDiscordLeader
+  syncDiscordLeader,
+  syncFactionWarningRoles,
+  sendInviteDM,
+  sendSupportTicketToAdmin,
+  getGuildMeta
 };

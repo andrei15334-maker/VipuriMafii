@@ -7,37 +7,113 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="login-container flex-center">
-    <div class="login-card glass-panel">
-      <!-- Try loading logo, fallback to clean text logo if missing -->
-      <img class="login-logo" src="logo.png" alt="V" onerror="this.style.display='none'; document.getElementById('text-logo').style.display='block';">
-      <div id="text-logo" style="display: none; font-size: 4rem; font-weight: 900; color: #ff3333; text-shadow: 0 0 10px rgba(255,51,51,0.5);">V</div>
+  <div class="login-split-wrapper">
+    <!-- Animated floating background particles across the whole screen -->
+    <div class="particle p1"></div>
+    <div class="particle p2"></div>
+    <div class="particle p3"></div>
+    <div class="particle p4"></div>
+    <div class="particle p5"></div>
+    <div class="particle p6" style="width: 130px; height: 130px; bottom: 20%; right: 15%; animation-duration: 25s; background: var(--accent-red); opacity: 0.1; filter: blur(8px);"></div>
+    <div class="particle p7" style="width: 175px; height: 175px; top: 15%; right: 25%; animation-duration: 35s; background: var(--accent-gold); opacity: 0.06; filter: blur(8px);"></div>
+    
+    <!-- Left Side: Animated Brand Banner -->
+    <div class="login-banner">
       
-      <div>
-        <h1 class="login-title">VIPURI ROLEPLAY</h1>
-        <p class="login-subtitle" style="text-transform: uppercase; font-size: 0.75rem; letter-spacing: 2px; color: #ff3333; font-weight: 700; margin-top: 4px;">Mafia Management Panel</p>
+      <div class="banner-content" style="width: 100%;">
+        <span class="banner-tag">👑 CONDUCERE VIPURI ROLEPLAY</span>
+        <h1 class="banner-main-title" style="font-size: 2.8rem; margin-bottom: 24px; letter-spacing: -1px;">STAFF & MANAGEMENT</h1>
+        
+        <!-- Premium Staff Table Widget -->
+        <div class="staff-card glass-panel" style="padding: 30px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.06); background: rgba(10, 10, 18, 0.65); box-shadow: var(--shadow-lg); width: 100%; max-width: 580px; display: flex; flex-direction: column; gap: 20px;">
+          
+          <!-- Row 1: Fondator -->
+          <div class="staff-item" style="display: flex; flex-direction: column; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="staff-role-badge" style="background: linear-gradient(135deg, rgba(230,57,70,0.2) 0%, rgba(230,57,70,0.05) 100%); color: #ff4a5a; border: 1px solid rgba(230,57,70,0.3); font-weight: 900; font-size: 0.75rem; padding: 6px 14px; border-radius: 20px; text-transform: uppercase; letter-spacing: 1px; display: inline-flex; align-items: center; gap: 6px;">
+                👑 FONDATOR
+              </span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+              <div class="staff-member-pill" style="cursor: default; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 10px; display: flex; align-items: center; gap: 8px; font-weight: 700; color: #fff; font-size: 0.95rem; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: all 0.3s ease;" data-id="259383078575800321" data-name="ZuZu">
+                <span style="color: #ff4a5a; font-size: 1.1rem; line-height: 1;">✦</span> ZuZu
+              </div>
+            </div>
+          </div>
+ 
+          <!-- Row 2: Manager Staff -->
+          <div class="staff-item" style="display: flex; flex-direction: column; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="staff-role-badge" style="background: linear-gradient(135deg, rgba(244,197,66,0.15) 0%, rgba(244,197,66,0.03) 100%); color: #f4c542; border: 1px solid rgba(244,197,66,0.3); font-weight: 900; font-size: 0.75rem; padding: 6px 14px; border-radius: 20px; text-transform: uppercase; letter-spacing: 1px; display: inline-flex; align-items: center; gap: 6px;">
+                🛡️ MANAGER STAFF
+              </span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+              <div class="staff-member-pill" style="cursor: default; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 10px; display: flex; align-items: center; gap: 8px; font-weight: 700; color: #fff; font-size: 0.95rem; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: all 0.3s ease;" data-id="811954484955709491" data-name="Andrei Cristian">
+                <span style="color: #f4c542; font-size: 1.1rem; line-height: 1;">✦</span> Andrei Cristian
+              </div>
+              <div class="staff-member-pill" style="cursor: default; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 10px; display: flex; align-items: center; gap: 8px; font-weight: 700; color: #fff; font-size: 0.95rem; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: all 0.3s ease;" data-id="387646852952227855" data-name="Hannibal">
+                <span style="color: #f4c542; font-size: 1.1rem; line-height: 1;">✦</span> Hannibal
+              </div>
+              <div class="staff-member-pill" style="cursor: default; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 10px; display: flex; align-items: center; gap: 8px; font-weight: 700; color: #fff; font-size: 0.95rem; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: all 0.3s ease;" data-id="779260658541658133" data-name="Furialoha">
+                <span style="color: #f4c542; font-size: 1.1rem; line-height: 1;">✦</span> Furialoha
+              </div>
+              <div class="staff-member-pill" style="cursor: default; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 10px; display: flex; align-items: center; gap: 8px; font-weight: 700; color: #fff; font-size: 0.95rem; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: all 0.3s ease;" data-id="348343282251726849" data-name="Bling">
+                <span style="color: #f4c542; font-size: 1.1rem; line-height: 1;">✦</span> Bling
+              </div>
+            </div>
+          </div>
+ 
+          <!-- Row 3: Manager Mafii -->
+          <div class="staff-item" style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="staff-role-badge" style="background: linear-gradient(135deg, rgba(46,204,113,0.15) 0%, rgba(46,204,113,0.03) 100%); color: #2ecc71; border: 1px solid rgba(46,204,113,0.3); font-weight: 900; font-size: 0.75rem; padding: 6px 14px; border-radius: 20px; text-transform: uppercase; letter-spacing: 1px; display: inline-flex; align-items: center; gap: 6px;">
+                ⚔️ MANAGER MAFII / GANG
+              </span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+              <div class="staff-member-pill" style="cursor: default; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 10px; display: flex; align-items: center; gap: 8px; font-weight: 700; color: #fff; font-size: 0.95rem; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: all 0.3s ease;" data-id="1084484231750758440" data-name="DDL">
+                <span style="color: #2ecc71; font-size: 1.1rem; line-height: 1;">✦</span> DDL
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Premium Description Quote & Info Box -->
+        <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 16px; max-width: 580px;">
+          <div style="background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.15); border-radius: 12px; padding: 16px; display: flex; gap: 12px; align-items: flex-start; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
+            <span style="font-size: 1.4rem; line-height: 1;">🛡️</span>
+            <div style="font-size: 0.88rem; line-height: 1.5; color: var(--text-secondary);">
+              <strong style="color: var(--accent-red); display: block; margin-bottom: 4px;">Panou Conducere Organizații</strong>
+              Echipa administrativă asigură respectul, echilibrul și performanța tuturor facțiunilor din comunitate. Autentifică-te cu Discord pentru a gestiona facțiunea ta.
+            </div>
+          </div>
+        </div>
       </div>
 
-      <p class="login-subtitle">
-        Autentifică-te cu contul tău de Discord pentru a accesa panoul administrativ al mafiei tale sau cel global.
-      </p>
+    <!-- Right Side: Clean Login Form Container -->
+    <div class="login-form-container">
+      <div class="login-card glass-panel">
+        <img class="login-logo" src="logo.png" alt="V" onerror="this.style.display='none'; document.getElementById('text-logo').style.display='block';">
+        <div id="text-logo" style="display: none; font-size: 3rem; font-weight: 900; color: var(--accent-red); text-shadow: 0 0 10px rgba(230,57,70,0.5); line-height: 1;">V</div>
+        
+        <div style="text-align: center; margin-top: 10px;">
+          <h2 class="login-title" style="font-size: 1.8rem;">AUTENTIFICARE</h2>
+          <p class="login-subtitle" style="text-transform: uppercase; font-size: 0.72rem; letter-spacing: 1.5px; color: var(--accent-red); font-weight: 800; margin-top: 4px;">MANAGEMENT MAFII & GANG-URI</p>
+        </div>
 
-      <a href="/auth/login" class="btn-primary" style="text-decoration: none;">
-        <svg style="width: 24px; height: 24px;" viewBox="0 0 127.14 96.36" fill="currentColor">
-          <path d="M107.7,8.07A105.15,105.15,0,0,0,77.26,0a77.19,77.19,0,0,0-3.3,6.83A96.67,96.67,0,0,0,53.22,6.83,77.19,77.19,0,0,0,49.88,0,105.15,105.15,0,0,0,19.44,8.07C3.66,31.58-1.86,54.65,1,77.53A105.73,105.73,0,0,0,32,96.36a77.7,77.7,0,0,0,6.63-10.85,68.43,68.43,0,0,1-10.43-5c.87-.64,1.72-1.32,2.53-2a75.46,75.46,0,0,0,72.76,0c.81.7,1.66,1.38,2.53,2a68.43,68.43,0,0,1-10.43,5,77.7,77.7,0,0,0,6.63,10.85,105.73,105.73,0,0,0,31-18.83C129.81,48.54,123.6,25.79,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53S36.18,40.36,42.45,40.36,53.83,46,53.83,53,48.72,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.24,60,73.24,53S78.41,40.36,84.69,40.36,96.07,46,96.07,53,91,65.69,84.69,65.69Z"/>
-        </svg>
-        Conectează-te cu Discord
-      </a>
+        <p class="login-subtitle" style="text-align: center; font-size: 0.92rem; margin: 10px 0;">
+          Conectează-te folosind contul de Discord oficial al comunității pentru a-ți accesa panoul organizației.
+        </p>
 
-      <!-- Dev Mode Bypass Login (Crucial for testing without Client Secret configuration) -->
-      <div class="dev-login-section">
-        <h2 class="dev-login-title">Conectare rapidă (Mod Dev)</h2>
-        <p class="login-subtitle" style="font-size: 0.8rem; margin-bottom: 12px;">Introdu ID-ul tău de Discord pentru a te conecta rapid la panel în modul local de testare:</p>
-        <div id="dev-error" style="color: #ff3333; font-size: 0.85rem; margin-bottom: 10px; display: none;"></div>
-        <input type="text" id="dev-user-id" class="input-field" placeholder="Ex: 279564882956288000">
-        <button id="dev-login-btn" class="btn-primary" style="background: #252530; color: #fff; box-shadow: none;">
-          Autentificare Dev
-        </button>
+        <div id="dev-error" style="color: var(--accent-red); font-size: 0.85rem; margin-bottom: 5px; text-align: center; display: none; background: rgba(230,57,70,0.1); border: 1px solid rgba(230,57,70,0.2); padding: 10px; border-radius: 8px; width: 100%;"></div>
+
+        <a href="/auth/login" class="btn-primary" style="text-decoration: none; margin-top: 10px;">
+          <svg style="width: 22px; height: 22px;" viewBox="0 0 127.14 96.36" fill="currentColor">
+            <path d="M107.7,8.07A105.15,105.15,0,0,0,77.26,0a77.19,77.19,0,0,0-3.3,6.83A96.67,96.67,0,0,0,53.22,6.83,77.19,77.19,0,0,0,49.88,0,105.15,105.15,0,0,0,19.44,8.07C3.66,31.58-1.86,54.65,1,77.53A105.73,105.73,0,0,0,32,96.36a77.7,77.7,0,0,0,6.63-10.85,68.43,68.43,0,0,1-10.43-5c.87-.64,1.72-1.32,2.53-2a75.46,75.46,0,0,0,72.76,0c.81.7,1.66,1.38,2.53,2a68.43,68.43,0,0,1-10.43,5,77.7,77.7,0,0,0,6.63,10.85,105.73,105.73,0,0,0,31-18.83C129.81,48.54,123.6,25.79,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53S36.18,40.36,42.45,40.36,53.83,46,53.83,53,48.72,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.24,60,73.24,53S78.41,40.36,84.69,40.36,96.07,46,96.07,53,91,65.69,84.69,65.69Z"/>
+          </svg>
+          Conectează-te cu Discord
+        </a>
       </div>
     </div>
   </div>
@@ -50,49 +126,13 @@
       const devError = document.getElementById('dev-error');
       devError.style.display = 'block';
       if (errorParam === 'oauth_not_configured') {
-        devError.innerText = 'Discord OAuth2 nu este complet configurat (lipsește CLIENT_SECRET în .env). Folosește modul Dev de mai jos!';
+        devError.innerText = 'Discord OAuth2 nu este configurat (lipsesc cheile CLIENT_SECRET / REDIRECT_URI în .env).';
       } else if (errorParam === 'oauth_failed') {
-        devError.innerText = 'Logarea prin Discord OAuth2 a eșuat. Verifică datele din .env.';
+        devError.innerText = 'Conectarea prin Discord OAuth2 a eșuat. Verifică datele configurate.';
       } else {
         devError.innerText = `Autentificarea a eșuat: ${errorParam}`;
       }
     }
-
-    // Dev Login Handler
-    document.getElementById('dev-login-btn').addEventListener('click', async () => {
-      const userId = document.getElementById('dev-user-id').value.trim();
-      const devError = document.getElementById('dev-error');
-      
-      if (!userId) {
-        devError.style.display = 'block';
-        devError.innerText = 'Te rog introdu un ID valid de Discord.';
-        return;
-      }
-
-      devError.style.display = 'none';
-
-      try {
-        const response = await fetch('/auth/dev-login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ userId })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok && data.success) {
-          window.location.href = data.redirect;
-        } else {
-          devError.style.display = 'block';
-          devError.innerText = data.error || 'Autentificare eșuată.';
-        }
-      } catch (err) {
-        devError.style.display = 'block';
-        devError.innerText = 'Eroare la conectare. Verifică dacă botul rulează.';
-      }
-    });
   </script>
 </body>
 </html>

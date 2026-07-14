@@ -197,9 +197,41 @@ async function checkAuth(req, res, next) {
       }
     }
     
+    // Dynamic on-demand sync fallback
+    if (req.session.user.role === 'none') {
+      let dbChanged = false;
+      db.mafias.forEach(m => {
+        if (m.roleId && member.roles.cache.has(m.roleId)) {
+          if (!Array.isArray(m.members)) m.members = [];
+          if (!m.members.includes(userId)) {
+            m.members.push(userId);
+            dbChanged = true;
+            console.log(`[ON-DEMAND SYNC] Adăugat automat ${member.user.tag} (${userId}) în facțiunea ${m.name} (deține rolul pe Discord)`);
+          }
+        }
+      });
+      
+      if (dbChanged) {
+        writeDb(db);
+        // Re-evaluate
+        const ownedMafia = db.mafias.find(m => m.ownerId === userId);
+        if (ownedMafia) {
+          req.session.user.role = 'leader';
+          req.session.user.mafiaId = ownedMafia.id;
+        } else {
+          const memberMafia = db.mafias.find(m => m.members.includes(userId));
+          if (memberMafia) {
+            req.session.user.role = 'member';
+            req.session.user.mafiaId = memberMafia.id;
+          }
+        }
+      }
+    }
+    
     if (req.session.user.role === 'none') {
       return res.status(403).json({ error: 'Nu deții un rol de Manager sau Lider/Membru într-o Mafie înregistrată!' });
     }
+
     
     // Mark as active in Web Panel
     onlineWebUsers.add(userId);
@@ -267,6 +299,172 @@ app.get('/api/guild-members', checkAuth, async (req, res) => {
     console.error('[API] guild-members error:', err);
     res.json([]);
   }
+});
+
+app.get('/api/guild-members/invitable', checkAuth, async (req, res) => {
+  try {
+    const { client } = getBot();
+    const db = readDb();
+    const guild = client.guilds.cache.get(db.settings.guildId || '1526274994353606726');
+    if (!guild) return res.json([]);
+
+    const searchStr = req.query.search ? String(req.query.search).trim() : '';
+
+    let membersCollection = null;
+    if (searchStr) {
+      membersCollection = await guild.members.search({ query: searchStr, limit: 50 }).catch(() => null);
+    } else {
+      membersCollection = await guild.members.fetch({ limit: 50 }).catch(() => null);
+    }
+
+    if (!membersCollection) {
+      membersCollection = guild.members.cache;
+    }
+
+    // Collect all mafia role IDs and current members in DB
+    const mafiaRoleIds = db.mafias.map(m => m.roleId).filter(Boolean);
+    const mafiaMembers = new Set();
+    db.mafias.forEach(m => {
+      if (Array.isArray(m.members)) {
+        m.members.forEach(id => mafiaMembers.add(id));
+      }
+    });
+
+    const results = Array.from(membersCollection.values())
+      .filter(m => !m.user.bot && !mafiaMembers.has(m.user.id) && !mafiaRoleIds.some(roleId => m.roles.cache.has(roleId)))
+      .map(m => ({
+        id: m.user.id,
+        username: m.user.username,
+        displayName: m.nickname || m.user.username,
+        avatar: m.user.displayAvatarURL({ size: 64 })
+      }))
+      .slice(0, 100);
+
+    res.json(results);
+  } catch (err) {
+    console.error('[API] invitable members error:', err);
+    res.json([]);
+  }
+});
+
+
+// Invite member to mafia (sends Direct Message invitation)
+app.post('/api/mafias/:id/invite', checkAuth, async (req, res) => {
+  const { role, mafiaId } = req.session.user;
+  const targetId = req.params.id;
+  
+  if (role !== 'manager' && role !== 'superadmin' && (role !== 'leader' || mafiaId !== targetId)) {
+    return res.status(403).json({ error: 'Nu ai permisiunea de a invita membrii pentru această facțiune!' });
+  }
+
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'ID-ul membrului este obligatoriu.' });
+
+  const db = readDb();
+  const mafia = db.mafias.find(m => m.id === targetId);
+  if (!mafia) return res.status(404).json({ error: 'Facțiunea nu a fost găsită.' });
+
+  const { sendInviteDM } = getBot();
+  const success = await sendInviteDM(userId, mafia.id, mafia.name);
+  
+  if (success) {
+    res.json({ success: true, message: 'Invitația a fost trimisă în privat pe Discord!' });
+  } else {
+    res.status(500).json({ error: 'Nu s-a putut trimite invitația. Utilizatorul are DMs închise!' });
+  }
+});
+
+// Get planned activities
+app.get('/api/activities', checkAuth, (req, res) => {
+  const db = readDb();
+  if (!db.activities) {
+    db.activities = [];
+    writeDb(db);
+  }
+  res.json(db.activities);
+});
+
+// Schedule new activity
+app.post('/api/activities', checkAuth, async (req, res) => {
+  const { role, mafiaId } = req.session.user;
+  const { title, description, dateTime, type, targetFactionId } = req.body;
+
+  if (!title || !dateTime || !type) {
+    return res.status(400).json({ error: 'Titlul, data/ora și tipul sunt obligatorii!' });
+  }
+
+  const db = readDb();
+  if (!db.activities) db.activities = [];
+
+  // Security check: Leaders can only schedule for their own mafia
+  let targetId = targetFactionId;
+  if (role === 'leader') {
+    targetId = mafiaId;
+  }
+
+  const mafia = db.mafias.find(m => m.id === targetId);
+  const newActivity = {
+    id: 'act_' + Date.now(),
+    title,
+    description: description || '',
+    dateTime,
+    type,
+    mafiaId: targetId || null,
+    mafiaName: mafia ? mafia.name : 'Global',
+    createdBy: req.session.user.username,
+    createdAt: new Date().toISOString()
+  };
+
+  db.activities.push(newActivity);
+  writeDb(db);
+
+  // Send Discord notifications
+  try {
+    const { sendChannelMessage, sendLogEmbed } = getBot();
+    
+    // Icon mapping
+    const icons = {
+      'sedinta': '📅',
+      'antrenament': '💪',
+      'war': '⚔️',
+      'special': '⭐'
+    };
+    const icon = icons[type] || '📅';
+
+    const embedData = {
+      title: `${icon} ACTIVITATE NOUĂ PROGRAMATĂ`,
+      description: `A fost organizat un nou eveniment pe panel!\n\n` +
+                   `📌 **Titlu:** ${title}\n` +
+                   `📝 **Detalii:** ${description || 'Fără descriere'}\n` +
+                   `⏳ **Data & Ora:** ${dateTime}\n` +
+                   `👤 **Organizat de:** ${req.session.user.username}`,
+      color: 0xF1C40F,
+      timestamp: new Date().toISOString()
+    };
+
+    if (mafia) {
+      // Send to Faction Chat Channel
+      if (mafia.channels?.chat) {
+        await sendChannelMessage(mafia.channels.chat, `||<@&${mafia.roleId}>||`, embedData);
+      }
+    } else {
+      // Send to Global Announcements
+      if (db.settings.globalAnnouncementsChannelId) {
+        await sendChannelMessage(db.settings.globalAnnouncementsChannelId, '@everyone', embedData);
+      }
+    }
+
+    // Log action globally
+    await sendLogEmbed(
+      '📅 EVENIMENT PROGRAMAT',
+      `Evenimentul **${title}** (${type.toUpperCase()}) a fost planificat pentru data de **${dateTime}** de către **${req.session.user.username}**.`,
+      '#F1C40F'
+    );
+  } catch (discordErr) {
+    console.error('[API] Discord notify activity error:', discordErr.message);
+  }
+
+  res.json({ success: true, activity: newActivity });
 });
 
 // Get Online Players (FiveM + Web combined)
@@ -388,6 +586,11 @@ app.get('/api/mafias', checkAuth, async (req, res) => {
       }
       
       const profile = (db.profiles || {})[memberId];
+      const isOwner = memberId === m.ownerId;
+      const isCoLeader = Array.isArray(m.coLeaders) && m.coLeaders.includes(memberId);
+      let memberRole = 'membru';
+      if (isOwner) memberRole = 'lider';
+      else if (isCoLeader) memberRole = 'coleader';
 
       return {
         id: memberId,
@@ -397,7 +600,8 @@ app.get('/api/mafias', checkAuth, async (req, res) => {
         warnings: warningsCount,
         sanctionsList: memberSanctions,
         ingameName: profile?.ingameName || null,
-        cfxId: profile?.cfxId || null
+        cfxId: profile?.cfxId || null,
+        role: memberRole
       };
     }));
     
@@ -473,7 +677,7 @@ app.post('/api/mafias/:id/sanctions', checkAuth, async (req, res) => {
   
   // Check if Faction disbands (3/3 WARNs)
   let disbanded = false;
-  const { deleteDiscordFaction, sendLogEmbed, sendChannelMessage } = getBot();
+  const { deleteDiscordFaction, sendLogEmbed, sendChannelMessage, syncFactionWarningRoles } = getBot();
   
   if (mafia.warningsWarn >= 3) {
     disbanded = true;
@@ -483,6 +687,9 @@ app.post('/api/mafias/:id/sanctions', checkAuth, async (req, res) => {
     
     // Remove from Database
     db.mafias = db.mafias.filter(m => m.id !== mafia.id);
+  } else {
+    // Sync warning roles to faction leader (owner)
+    await syncFactionWarningRoles(mafia.id);
   }
   
   writeDb(db);
@@ -666,11 +873,11 @@ app.post('/api/mafias/:id/members', checkAuth, async (req, res) => {
   res.json({ success: true, members: mafia.members });
 });
 
-// 9. Remove Member from Mafia (Manager & Leader)
 app.delete('/api/mafias/:id/members/:userId', checkAuth, async (req, res) => {
   const { role, mafiaId } = req.session.user;
   const targetId = req.params.id;
   const memberId = req.params.userId;
+  const kickDiscord = req.query.kickDiscord === 'true';
   
   if (role !== 'manager' && role !== 'superadmin' && (role !== 'leader' || mafiaId !== targetId)) {
     return res.status(403).json({ error: 'Nu ai permisiunea de a gestiona membrii acestei facțiuni!' });
@@ -689,10 +896,24 @@ app.delete('/api/mafias/:id/members/:userId', checkAuth, async (req, res) => {
     return res.status(400).json({ error: 'Liderul fondator poate fi demis doar de către un Manager!' });
   }
   
-  const { modifyMemberRole, sendLogEmbed } = getBot();
+  const { modifyMemberRole, sendLogEmbed, client } = getBot();
   
-  // Remove Discord Role
-  await modifyMemberRole(memberId, mafia.roleId, 'remove');
+  let kickExecuted = false;
+  if (kickDiscord) {
+    const guild = client.guilds.cache.get(db.settings.guildId || "1526274994353606726");
+    if (guild) {
+      const member = await guild.members.fetch(memberId).catch(() => null);
+      if (member) {
+        await member.kick(`Demis din facțiune și Kicked de pe Discord de către ${req.session.user.username}`).catch(err => {
+          console.error(`[DISCORD KICK] Eșec kick membru ${memberId}:`, err);
+        });
+        kickExecuted = true;
+      }
+    }
+  }
+
+  // Always remove Discord Role as fallback or default
+  await modifyMemberRole(memberId, mafia.roleId, 'remove').catch(() => null);
   
   // Remove Leader Role if they are owner/lider
   if (memberId === mafia.ownerId) {
@@ -700,11 +921,10 @@ app.delete('/api/mafias/:id/members/:userId', checkAuth, async (req, res) => {
     if (mafia.type === 'oficiala') leaderRoleName = 'Lider Mafie Oficiala';
     if (mafia.type === 'neoficiala') leaderRoleName = 'Lider Mafie Neoficiala';
     
-    const { client } = getBot();
-    const guild = client.guilds.cache.get(db.settings.guildId);
+    const guild = client.guilds.cache.get(db.settings.guildId || "1526274994353606726");
     const liderRole = guild?.roles.cache.find(r => r.name === leaderRoleName);
     if (liderRole) {
-      await modifyMemberRole(memberId, liderRole.id, 'remove');
+      await modifyMemberRole(memberId, liderRole.id, 'remove').catch(() => null);
     }
     
     // Change owner if the founder was kicked by a manager (reset ownerId to manager)
@@ -718,9 +938,169 @@ app.delete('/api/mafias/:id/members/:userId', checkAuth, async (req, res) => {
   writeDb(db);
   
   // Log
-  await sendLogEmbed('👤 MEMBRU DEMIS (PANEL)', `Utilizatorul <@${memberId}> a fost demis din facțiunea **${mafia.name}** de către **${req.session.user.username}**.`);
+  const logMessage = kickExecuted 
+    ? `Utilizatorul <@${memberId}> a fost demis din facțiunea **${mafia.name}** și dat afară de pe Discord de către **${req.session.user.username}**.`
+    : `Utilizatorul <@${memberId}> a fost demis din facțiunea **${mafia.name}** (roluri scoase) de către **${req.session.user.username}**.`;
+
+  await sendLogEmbed('👤 MEMBRU DEMIS (PANEL)', logMessage);
   
   res.json({ success: true, members: mafia.members });
+});
+
+
+// Promote member to Main Leader (Owner) - Manager/Superadmin Only
+app.post('/api/mafias/:id/members/:userId/promote-leader', checkAuth, async (req, res) => {
+  const { role } = req.session.user;
+  const targetId = req.params.id;
+  const memberId = req.params.userId;
+
+  if (role !== 'manager' && role !== 'superadmin') {
+    return res.status(403).json({ error: 'Doar Managerii Staff pot schimba liderul principal al organizației!' });
+  }
+
+  const db = readDb();
+  const mafia = db.mafias.find(m => m.id === targetId);
+  if (!mafia) return res.status(404).json({ error: 'Facțiunea nu a fost găsită.' });
+
+  if (!mafia.members.includes(memberId)) {
+    return res.status(404).json({ error: 'Utilizatorul nu face parte din această facțiune.' });
+  }
+
+  if (memberId === mafia.ownerId) {
+    return res.status(400).json({ error: 'Acest membru este deja liderul principal!' });
+  }
+
+  const oldOwnerId = mafia.ownerId;
+  const { modifyMemberRole, sendLogEmbed, client } = getBot();
+
+  // 1. Give Leader Role to the NEW owner on Discord
+  let leaderRoleName = 'Lider Gang';
+  if (mafia.type === 'oficiala') leaderRoleName = 'Lider Mafie Oficiala';
+  if (mafia.type === 'neoficiala') leaderRoleName = 'Lider Mafie Neoficiala';
+
+  const guild = client.guilds.cache.get(db.settings.guildId || "1526274994353606726");
+  const liderRole = guild?.roles.cache.find(r => r.name === leaderRoleName);
+
+  if (liderRole) {
+    // Add to new leader
+    await modifyMemberRole(memberId, liderRole.id, 'add').catch(() => null);
+    
+    // Remove from old leader (if old leader exists)
+    if (oldOwnerId) {
+      await modifyMemberRole(oldOwnerId, liderRole.id, 'remove').catch(() => null);
+    }
+  }
+
+  // 2. Update database ownerId
+  mafia.ownerId = memberId;
+
+  // 3. Remove Co-Leader state if they were a Co-Leader
+  if (Array.isArray(mafia.coLeaders)) {
+    mafia.coLeaders = mafia.coLeaders.filter(id => id !== memberId);
+  }
+
+  writeDb(db);
+
+  // Log the transfer
+  const logMessage = `Utilizatorul <@${memberId}> a fost promovat ca **Lider Principal** al facțiunii **${mafia.name}** de către Managerul **${req.session.user.username}** (fostul lider fiind <@${oldOwnerId}>).`;
+  await sendLogEmbed('👑 LIDER NOU PROMOVAT (PANEL)', logMessage);
+
+  res.json({ success: true, ownerId: memberId });
+});
+
+
+// Promote member to Co-Leader
+app.post('/api/mafias/:id/members/:userId/promote', checkAuth, async (req, res) => {
+  const { role, mafiaId } = req.session.user;
+  const targetId = req.params.id;
+  const memberId = req.params.userId;
+  
+  if (role !== 'manager' && role !== 'superadmin' && (role !== 'leader' || mafiaId !== targetId)) {
+    return res.status(403).json({ error: 'Nu ai permisiunea de a promova membrii în această facțiune!' });
+  }
+
+  const db = readDb();
+  const mafia = db.mafias.find(m => m.id === targetId);
+  if (!mafia) return res.status(404).json({ error: 'Facțiunea nu a fost găsită.' });
+
+  if (!mafia.members.includes(memberId)) {
+    return res.status(404).json({ error: 'Membrul nu aparține acestei facțiuni!' });
+  }
+
+  if (memberId === mafia.ownerId) {
+    return res.status(400).json({ error: 'Liderul principal nu poate fi promovat ca Co-Lider!' });
+  }
+
+  if (!mafia.coLeaders) mafia.coLeaders = [];
+  
+  if (mafia.coLeaders.includes(memberId)) {
+    return res.status(400).json({ error: 'Membrul este deja Co-Lider!' });
+  }
+
+  mafia.coLeaders.push(memberId);
+  writeDb(db);
+
+  // Give Discord Co-Leader Role
+  const { modifyMemberRole, sendLogEmbed } = getBot();
+  let coLeaderRoleId = null;
+  if (mafia.type === 'gang') coLeaderRoleId = db.settings.coLiderGangRoleId;
+  else if (mafia.type === 'oficiala') coLeaderRoleId = db.settings.coLiderOficialaRoleId;
+  else if (mafia.type === 'neoficiala') coLeaderRoleId = db.settings.coLiderNeoficialaRoleId;
+
+  if (coLeaderRoleId) {
+    await modifyMemberRole(memberId, coLeaderRoleId, 'add');
+  }
+
+  // Log globally
+  await sendLogEmbed(
+    '⭐ PROMOVARE CO-LIDER',
+    `Membru <@${memberId}> a fost promovat la gradul de **Co-Lider** în facțiunea **${mafia.name}** de către **${req.session.user.username}**.`,
+    '#2ECC71'
+  );
+
+  res.json({ success: true, message: 'Membrul a fost promovat cu succes ca Co-Lider!' });
+});
+
+// Demote Co-Leader to Member
+app.post('/api/mafias/:id/members/:userId/demote', checkAuth, async (req, res) => {
+  const { role, mafiaId } = req.session.user;
+  const targetId = req.params.id;
+  const memberId = req.params.userId;
+  
+  if (role !== 'manager' && role !== 'superadmin' && (role !== 'leader' || mafiaId !== targetId)) {
+    return res.status(403).json({ error: 'Nu ai permisiunea de a retrograda membrii din această facțiune!' });
+  }
+
+  const db = readDb();
+  const mafia = db.mafias.find(m => m.id === targetId);
+  if (!mafia) return res.status(404).json({ error: 'Facțiunea nu a fost găsită.' });
+
+  if (!mafia.coLeaders || !mafia.coLeaders.includes(memberId)) {
+    return res.status(400).json({ error: 'Membrul nu este Co-Lider!' });
+  }
+
+  mafia.coLeaders = mafia.coLeaders.filter(id => id !== memberId);
+  writeDb(db);
+
+  // Remove Discord Co-Leader Role
+  const { modifyMemberRole, sendLogEmbed } = getBot();
+  let coLeaderRoleId = null;
+  if (mafia.type === 'gang') coLeaderRoleId = db.settings.coLiderGangRoleId;
+  else if (mafia.type === 'oficiala') coLeaderRoleId = db.settings.coLiderOficialaRoleId;
+  else if (mafia.type === 'neoficiala') coLeaderRoleId = db.settings.coLiderNeoficialaRoleId;
+
+  if (coLeaderRoleId) {
+    await modifyMemberRole(memberId, coLeaderRoleId, 'remove');
+  }
+
+  // Log globally
+  await sendLogEmbed(
+    '⭐ RETROGRADARE MEMBRU',
+    `Co-Liderul <@${memberId}> a fost retrogradat la gradul de **Membru** în facțiunea **${mafia.name}** de către **${req.session.user.username}**.`,
+    '#E74C3C'
+  );
+
+  res.json({ success: true, message: 'Co-Liderul a fost retrogradat cu succes ca membru simplu!' });
 });
 
 // 10. Sanction Individual Member (Manager & Leader)
@@ -1061,6 +1441,27 @@ app.delete('/api/mafias/:id/arrows/:arrowId', checkAuth, async (req, res) => {
   res.json({ success: true, arrows: mafia.arrows });
 });
 
+// Submit support ticket to administrative staff member
+app.post('/api/support/ticket', async (req, res) => {
+  const { adminId, adminName, type, userName, userId, details } = req.body;
+  if (!adminId || !adminName || !type || !userName || !userId || !details) {
+    return res.status(400).json({ error: 'Toate câmpurile sunt obligatorii!' });
+  }
+
+  try {
+    const { sendSupportTicketToAdmin } = getBot();
+    const success = await sendSupportTicketToAdmin(adminId, adminName, type, userName, userId, details);
+    if (success) {
+      res.json({ success: true });
+    } else {
+      res.status(500).json({ error: 'Botul nu a putut trimite mesajul privat către administrator. Este posibil ca acesta să aibă DMs închise.' });
+    }
+  } catch (err) {
+    console.error('[API] support ticket error:', err);
+    res.status(500).json({ error: 'Eroare internă la trimiterea tichetului.' });
+  }
+});
+
 // 13. Update Global Settings (Super Admin Only)
 app.post('/api/settings', checkAuth, async (req, res) => {
   const { role } = req.session.user;
@@ -1081,6 +1482,22 @@ app.post('/api/settings', checkAuth, async (req, res) => {
   writeDb(db);
   
   res.json({ success: true, settings: db.settings });
+});
+
+// 14. Discord Guild Meta (roles + channels) for Settings dropdowns
+app.get('/api/discord/meta', checkAuth, async (req, res) => {
+  const { role } = req.session.user;
+  if (role !== 'superadmin' && role !== 'manager') {
+    return res.status(403).json({ error: 'Acces interzis.' });
+  }
+  try {
+    const { getGuildMeta } = getBot();
+    const meta = await getGuildMeta();
+    res.json(meta);
+  } catch (err) {
+    console.error('[API] discord meta error:', err);
+    res.status(500).json({ error: 'Eroare la obținerea datelor Discord.' });
+  }
 });
 
 // Start function for the Express Server

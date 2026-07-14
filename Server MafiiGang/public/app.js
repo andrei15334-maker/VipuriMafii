@@ -191,7 +191,8 @@ function setupNavigation() {
       document.getElementById(tabId)?.classList.add('active');
 
       const headers = {
-        'tab-overview':         ['Prezentare Generală',       'Statistici globale ale serverului Vipuri Roleplay.'],
+        'tab-leaderboard':      ['Clasament Facțiuni',         'Clasamentul oficial al organizațiilor pe baza activității lor.'],
+        'tab-activities':       ['Ședințe & Activități',       'Planifică ședințe, antrenamente sau war-uri pe Discord.'],
         'tab-factions':         ['Gestionare Facțiuni',        'Administrează membrii, sarcinile și sancțiunile active.'],
         'tab-all-factions':     ['Toate Facțiunile',           'Vizualizează toate mafiile și gang-urile înregistrate.'],
         'tab-online-players':   ['Jucători Online',            'Membrii conectați acum pe FiveM sau Dashboard.'],
@@ -203,6 +204,8 @@ function setupNavigation() {
         pageHeaderSubEl.innerText   = headers[tabId][1];
       }
 
+      if (tabId === 'tab-leaderboard') await renderLeaderboard();
+      if (tabId === 'tab-activities') await renderActivities();
       if (tabId === 'tab-all-factions') await renderAllFactionsGrid();
       if (tabId === 'tab-online-players') await renderOnlinePlayers();
       if (tabId === 'tab-logs') await renderAuditLogs();
@@ -270,10 +273,10 @@ async function fetchCurrentUser() {
       roleText = 'Manager Mafii/Gang';
       badgeColor = '#f1c40f';
     } else if (currentUser.role === 'leader') {
-      roleText = 'Lider Facțiune';
+      roleText = 'Lider Organizație';
       badgeColor = '#ff3333';
     } else if (currentUser.role === 'member') {
-      roleText = 'Membru Facțiune';
+      roleText = 'Membru Organizație';
       badgeColor = '#2ecc71';
     }
     
@@ -315,7 +318,7 @@ async function loadFactionsData() {
       factionSelector.innerHTML = '';
       
       if (allFactions.length === 0) {
-        factionSelector.innerHTML = '<option value="">Fără facțiuni înregistrate</option>';
+        factionSelector.innerHTML = '<option value="">Fără organizații înregistrate</option>';
         renderEmptyFactionView();
         return;
       }
@@ -356,7 +359,7 @@ async function loadFactionsData() {
 
 // 4. Render Functions
 function renderEmptyFactionView() {
-  membersListContainer.innerHTML = '<div class="empty-state">Nu a fost selectată nicio facțiune activă.</div>';
+  membersListContainer.innerHTML = '<div class="empty-state">Nu a fost selectată nicio organizație activă.</div>';
   sanctionsListContainer.innerHTML = '<div class="empty-state">Fără sancțiuni.</div>';
   tasksListContainer.innerHTML = '<div class="empty-state">Fără task-uri.</div>';
 }
@@ -440,56 +443,114 @@ function renderMembers(mafia) {
     return;
   }
   
+  // Create premium table element
+  const table = document.createElement('table');
+  table.className = 'premium-table';
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th style="width: 50px;"></th>
+        <th>Nume Discord</th>
+        <th>Rol / Rang</th>
+        <th>Status Online</th>
+        <th>Sancțiuni (AV)</th>
+        <th style="text-align: right;">Acțiuni</th>
+      </tr>
+    </thead>
+    <tbody id="members-table-body"></tbody>
+  `;
+  
+  membersListContainer.appendChild(table);
+  const tbody = document.getElementById('members-table-body');
+  
   members.forEach(m => {
     const memberId = m.id;
-    const item = document.createElement('div');
-    item.className = 'member-item';
+    const row = document.createElement('tr');
     
-    // Check if member is founder/owner
+    // Check if member is founder/owner or co-leader
     const isFounder = memberId === mafia.ownerId;
-    const canKick = (currentUser.role === 'manager' || currentUser.role === 'superadmin' || (currentUser.role === 'leader' && !isFounder)) && memberId !== currentUser.id;
-    const canSanction = (currentUser.role === 'manager' || currentUser.role === 'superadmin' || (currentUser.role === 'leader' && !isFounder)) && memberId !== currentUser.id;
+    const isCoLeader = m.role === 'coleader';
+    
+    // Safety check: a leader/founder can be managed, sanctioned or kicked ONLY by a manager/superadmin
+    const isManager = currentUser.role === 'manager' || currentUser.role === 'superadmin';
+    const canKick = (isManager || currentUser.role === 'leader') && (!isFounder || isManager) && memberId !== currentUser.id;
+    const canSanction = (isManager || currentUser.role === 'leader') && (!isFounder || isManager) && memberId !== currentUser.id;
+    const canManageRank = (isManager || currentUser.role === 'leader') && (!isFounder || isManager) && memberId !== currentUser.id;
+
     
     // Render Warning Tag
-    const warningTag = m.warnings > 0 ? `<span class="badge badge-oficiala" style="font-size: 0.65rem; padding: 2px 6px; margin-left: 5px;">AV ${m.warnings}/3</span>` : '';
+    const warningTag = m.warnings > 0 
+      ? `<span class="badge badge-oficiala" style="font-size: 0.72rem; padding: 3px 8px; font-weight: 800;">AV ${m.warnings}/3</span>` 
+      : `<span style="color: var(--text-secondary); font-size: 0.82rem; opacity: 0.65;">Fără sancțiuni</span>`;
     
-    // Online indicators (buline)
-    const discordStatusDot = m.onlineDiscord ? `<span style="display:inline-block; width:8px; height:8px; background:#2ecc71; border-radius:50%; margin-right:4px;" title="Online pe Dashboard"></span>` : `<span style="display:inline-block; width:8px; height:8px; background:#95a5a6; border-radius:50%; margin-right:4px;" title="Offline pe Dashboard"></span>`;
-    const fivemStatusDot = m.onlineFiveM ? `<span style="display:inline-block; width:8px; height:8px; background:#2ecc71; border-radius:50%; margin-right:4px;" title="Online în FiveM"></span>` : `<span style="display:inline-block; width:8px; height:8px; background:#95a5a6; border-radius:50%; margin-right:4px;" title="Offline în FiveM"></span>`;
+    // Online indicators (badges)
+    const discordStatus = m.onlineDiscord 
+      ? `<span class="badge" style="background: rgba(46,204,113,0.1); border-color: rgba(46,204,113,0.25); color: #2ecc71; font-size: 0.7rem; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px; font-weight: 700;"><span style="width: 6px; height: 6px; background: #2ecc71; border-radius: 50%;"></span> Web</span>` 
+      : `<span class="badge" style="background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); color: var(--text-secondary); font-size: 0.7rem; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px; font-weight: 700;"><span style="width: 6px; height: 6px; background: var(--text-secondary); border-radius: 50%; opacity: 0.5;"></span> Web</span>`;
+      
+    const fivemStatus = m.onlineFiveM 
+      ? `<span class="badge" style="background: rgba(46,204,113,0.1); border-color: rgba(46,204,113,0.25); color: #2ecc71; font-size: 0.7rem; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px; font-weight: 700;"><span style="width: 6px; height: 6px; background: #2ecc71; border-radius: 50%;"></span> FiveM</span>` 
+      : `<span class="badge" style="background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); color: var(--text-secondary); font-size: 0.7rem; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px; font-weight: 700;"><span style="width: 6px; height: 6px; background: var(--text-secondary); border-radius: 50%; opacity: 0.5;"></span> FiveM</span>`;
 
-    item.innerHTML = `
-      <div class="member-details">
-        <div class="member-avatar flex-center">👤</div>
-        <div>
-          <div class="member-id">
-            ${m.username || memberId} 
-            ${isFounder ? '<span class="badge badge-leader" style="font-size: 0.65rem; padding: 2px 6px; margin-left:5px;">Lider</span>' : ''}
-            ${warningTag}
-          </div>
-          <div style="font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: 10px; margin-top: 2px;">
-            <span style="display: flex; align-items: center;">${discordStatusDot} Web</span>
-            <span style="display: flex; align-items: center;">${fivemStatusDot} FiveM</span>
-          </div>
+    // Role tags
+    let roleBadge = '<span class="badge" style="font-size: 0.7rem; padding: 3px 8px; background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); color: var(--text-secondary); display: inline-flex; align-items: center; gap: 4px;">👤 Membru</span>';
+    if (isFounder) {
+      roleBadge = '<span class="badge badge-leader" style="font-size: 0.72rem; padding: 3px 8px; font-weight: 900; letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 4px;">👑 Lider</span>';
+    } else if (isCoLeader) {
+      roleBadge = '<span class="badge badge-neoficiala" style="font-size: 0.72rem; padding: 3px 8px; font-weight: 900; background: rgba(243,156,18,0.1); border-color: rgba(243,156,18,0.25); color: #f39c12; letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 4px;">🛡️ Co-Lider</span>';
+    }
+
+
+    // Rank action buttons
+    let rankButtonHtml = '';
+    if (canManageRank) {
+      if (isCoLeader) {
+        rankButtonHtml = `<button class="btn-sm demote-btn" style="background: rgba(231, 76, 60, 0.12); border-color: rgba(231, 76, 60, 0.25); color: #ff7675; padding: 6px 12px; font-size: 0.75rem;" data-userid="${memberId}">Retrogradează</button>`;
+      } else {
+        rankButtonHtml = `<button class="btn-sm promote-btn" style="background: rgba(46, 204, 113, 0.12); border-color: rgba(46, 204, 113, 0.25); color: #55efc4; padding: 6px 12px; font-size: 0.75rem;" data-userid="${memberId}">Promovează Co-Lider</button>`;
+      }
+    }
+
+    let leaderButtonHtml = '';
+    if (isManager && !isFounder) {
+      leaderButtonHtml = `<button class="btn-sm promote-leader-btn" style="background: rgba(139, 92, 246, 0.12); border-color: rgba(139, 92, 246, 0.25); color: #c084fc; padding: 6px 12px; font-size: 0.75rem;" data-userid="${memberId}">Promovează Lider</button>`;
+    }
+
+    row.innerHTML = `
+      <td style="padding: 12px 18px;"><div class="member-avatar flex-center" style="width: 32px; height: 32px; font-size: 1rem; border-radius: 50%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); color: var(--text-secondary);">👤</div></td>
+      <td style="font-weight: 700; color: #fff; padding: 12px 18px;">${m.username || memberId}</td>
+      <td style="padding: 12px 18px;">${roleBadge}</td>
+      <td style="padding: 12px 18px;">
+        <div style="display: flex; gap: 8px; align-items: center;">
+          ${discordStatus}
+          ${fivemStatus}
         </div>
-      </div>
-      <div style="display: flex; gap: 8px;">
-        ${canSanction ? `<button class="btn-sm btn-danger-sm sanction-member-btn" data-userid="${memberId}">Sancționează</button>` : ''}
-        ${canKick ? `<button class="btn-sm btn-danger-sm kick-btn" style="background: rgba(231, 76, 60, 0.1);" data-userid="${memberId}">Demitere</button>` : ''}
-      </div>
+      </td>
+      <td style="padding: 12px 18px;">${warningTag}</td>
+      <td style="text-align: right; padding: 12px 18px;">
+        <div style="display: inline-flex; gap: 8px; align-items: center;">
+          ${leaderButtonHtml}
+          ${rankButtonHtml}
+
+          ${canSanction ? `<button class="btn-sm sanction-member-btn" style="background: rgba(244,197,66,0.12); border-color: rgba(244,197,66,0.25); color: var(--accent-gold); padding: 6px 12px; font-size: 0.75rem;" data-userid="${memberId}">Sancționează</button>` : ''}
+          ${canKick ? `<button class="btn-sm kick-btn" style="background: rgba(231, 76, 60, 0.08); border-color: rgba(231, 76, 60, 0.18); color: #ff7675; padding: 6px 12px; font-size: 0.75rem;" data-userid="${memberId}">Demitere</button>` : ''}
+        </div>
+      </td>
     `;
     
-    membersListContainer.appendChild(item);
+    tbody.appendChild(row);
   });
   
   // Event listeners for kick buttons
   document.querySelectorAll('.kick-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
+    btn.addEventListener('click', (e) => {
       const userId = e.target.getAttribute('data-userid');
-      if (confirm(`Sigur dorești să îl demiți pe membrul cu ID-ul ${userId}?`)) {
-        await kickMember(mafia.id, userId);
-      }
+      showCustomKickModal(mafia.id, userId, async (kickDiscord) => {
+        await kickMember(mafia.id, userId, kickDiscord);
+      });
     });
   });
+
 
   // Event listeners for individual member sanction buttons
   document.querySelectorAll('.sanction-member-btn').forEach(btn => {
@@ -498,13 +559,80 @@ function renderMembers(mafia) {
       openMemberSanctionModal(mafia.id, userId);
     });
   });
+
+  // Event listeners for promote buttons
+  document.querySelectorAll('.promote-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const userId = e.target.getAttribute('data-userid');
+      if (confirm('Sigur dorești să promovezi acest membru ca Co-Lider?')) {
+        try {
+          const res = await fetch(`/api/mafias/${mafia.id}/members/${userId}/promote`, { method: 'POST' });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            window.showToast('✅ Membrul a fost promovat ca Co-Lider!');
+            loadFactions();
+          } else {
+            alert(data.error || 'Eroare la promovare.');
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Eroare rețea.');
+        }
+      }
+    });
+  });
+
+  // Event listeners for promote leader buttons
+  document.querySelectorAll('.promote-leader-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const userId = e.target.getAttribute('data-userid');
+      if (confirm(`Sigur dorești să îl promovezi pe membrul cu ID-ul ${userId} ca Lider Principal al acestei facțiuni? Această acțiune va înlocui vechiul lider.`)) {
+        try {
+          const res = await fetch(`/api/mafias/${mafia.id}/members/${userId}/promote-leader`, { method: 'POST' });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            window.showToast('👑 Membru promovat ca Lider Principal!');
+            await refreshActiveFaction();
+          } else {
+            alert(`Eroare: ${data.error}`);
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Eroare la promovarea liderului.');
+        }
+      }
+    });
+  });
+
+  // Event listeners for demote buttons
+
+  document.querySelectorAll('.demote-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const userId = e.target.getAttribute('data-userid');
+      if (confirm('Sigur dorești să retrogradezi acest Co-Lider?')) {
+        try {
+          const res = await fetch(`/api/mafias/${mafia.id}/members/${userId}/demote`, { method: 'POST' });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            window.showToast('✅ Co-Liderul a fost retrogradat.');
+            loadFactions();
+          } else {
+            alert(data.error || 'Eroare la retrogradare.');
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Eroare rețea.');
+        }
+      }
+    });
+  });
 }
 
 function renderSanctions(mafia) {
   sanctionsListContainer.innerHTML = '';
   
   if (!mafia.sanctions || mafia.sanctions.length === 0) {
-    sanctionsListContainer.innerHTML = '<div class="empty-state">Această facțiune nu are nicio sancțiune activă.</div>';
+    sanctionsListContainer.innerHTML = '<div class="empty-state">Această organizație nu are nicio sancțiune activă.</div>';
     return;
   }
   
@@ -784,7 +912,7 @@ function setupActions() {
   const editFactionModal = document.getElementById('edit-faction-modal');
   
   document.getElementById('edit-faction-btn').addEventListener('click', () => {
-    if (!activeFaction) return alert('Selectează o facțiune mai întâi!');
+    if (!activeFaction) return alert('Selectează o organizație mai întâi!');
     document.getElementById('edit-faction-name').value = activeFaction.name;
     document.getElementById('edit-faction-type').value = activeFaction.type;
     document.getElementById('edit-faction-owner').value = activeFaction.ownerId;
@@ -811,7 +939,7 @@ function setupActions() {
       
       const data = await response.json();
       if (response.ok) {
-        alert('Facțiune editată cu succes!');
+        alert('Organizație editată cu succes!');
         editFactionModal.style.display = 'none';
         
         // Reload all factions from API
@@ -821,15 +949,15 @@ function setupActions() {
       }
     } catch (err) {
       console.error(err);
-      alert('Eroare la editarea facțiunii.');
+      alert('Eroare la editarea organizației.');
     }
   });
 
   // Delete Faction Button
   document.getElementById('delete-faction-btn').addEventListener('click', async () => {
-    if (!activeFaction) return alert('Selectează o facțiune mai întâi!');
+    if (!activeFaction) return alert('Selectează o organizație mai întâi!');
     
-    const confirmDelete = confirm(`Ești ABSOLUT sigur că vrei să ștergi facțiunea "${activeFaction.name}" definitiv?\n` +
+    const confirmDelete = confirm(`Ești ABSOLUT sigur că vrei să desființezi organizația "${activeFaction.name}" definitiv?\n` +
       `Această acțiune va șterge toate rolurile, categoriile și canalele de pe Discord!`);
       
     if (!confirmDelete) return;
@@ -841,26 +969,81 @@ function setupActions() {
       
       const data = await response.json();
       if (response.ok) {
-        alert('Facțiune ștearsă cu succes de pe site și Discord!');
+        alert('Organizație desființată cu succes de pe site și Discord!');
         location.reload(); // Reload dashboard to clear everything and refresh
       } else {
         alert(`Eroare: ${data.error}`);
       }
     } catch (err) {
       console.error(err);
-      alert('Eroare la ștergerea facțiunii.');
+      alert('Eroare la desființarea organizației.');
     }
   });
 }
 
-async function kickMember(mafiaId, userId) {
+function showCustomKickModal(mafiaId, userId, callback) {
+  // Check if modal already exists
+  let modal = document.getElementById('custom-kick-modal');
+  if (modal) modal.remove();
+
+  modal = document.createElement('div');
+  modal.id = 'custom-kick-modal';
+  modal.className = 'modal-overlay open';
+  modal.innerHTML = `
+    <div class="modal-box glass-panel" style="max-width: 440px; padding: 28px; text-align: center; background: rgba(10, 10, 18, 0.95); border: 1px solid rgba(255,255,255,0.08); box-shadow: var(--shadow-lg); border-radius: 16px;">
+      <h3 style="font-size: 1.3rem; font-weight: 800; color: #ff7675; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        ⚠️ DEMITERE MEMBRU
+      </h3>
+      <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 24px; line-height: 1.5;">
+        Alege cum dorești să aplici demiterea pentru membrul cu ID-ul Discord <strong style="color: #fff;"><span id="kick-user-display">${userId}</span></strong>:
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
+        <button id="kick-only-roles" class="btn-action" style="width: 100%; padding: 12px; font-size: 0.85rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255,255,255,0.08); color: #fff; cursor: pointer; border-radius: 8px;">
+          🚫 Doar scoate gradele (Rămâne pe Discord)
+        </button>
+        <button id="kick-from-server" class="btn-action" style="width: 100%; padding: 12px; font-size: 0.85rem; background: rgba(231, 76, 60, 0.15); border: 1px solid rgba(231, 76, 60, 0.3); color: #ff7675; cursor: pointer; border-radius: 8px;">
+          🚨 Scoate gradele + Kick de pe Discord
+        </button>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button id="kick-cancel" class="btn-action" style="background: transparent; border: none; color: var(--text-secondary); padding: 8px 16px; cursor: pointer; font-weight: 700;">
+          Anulează
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Event listeners
+  document.getElementById('kick-only-roles').addEventListener('click', () => {
+    modal.classList.remove('open');
+    setTimeout(() => modal.remove(), 300);
+    callback(false); // kickDiscord = false
+  });
+
+  document.getElementById('kick-from-server').addEventListener('click', () => {
+    modal.classList.remove('open');
+    setTimeout(() => modal.remove(), 300);
+    callback(true); // kickDiscord = true
+  });
+
+  document.getElementById('kick-cancel').addEventListener('click', () => {
+    modal.classList.remove('open');
+    setTimeout(() => modal.remove(), 300);
+  });
+}
+
+async function kickMember(mafiaId, userId, kickDiscord) {
   try {
-    const response = await fetch(`/api/mafias/${mafiaId}/members/${userId}`, {
+    const response = await fetch(`/api/mafias/${mafiaId}/members/${userId}?kickDiscord=${kickDiscord}`, {
       method: 'DELETE'
     });
     const data = await response.json();
     if (response.ok) {
-      alert('Membru demis cu succes!');
+      window.showToast('✅ Membru demis cu succes!');
       await refreshActiveFaction();
     } else {
       alert(`Eroare: ${data.error}`);
@@ -870,6 +1053,7 @@ async function kickMember(mafiaId, userId) {
     alert('Eroare la demiterea membrului.');
   }
 }
+
 
 async function completeTask(mafiaId, taskId) {
   try {
@@ -997,7 +1181,7 @@ async function renderAllFactionsGrid() {
     allFactions = factions;
 
     if (factions.length === 0) {
-      grid.innerHTML = '<div class="empty-state">Nicio facțiune înregistrată încă.</div>';
+      grid.innerHTML = '<div class="empty-state">Nicio organizație înregistrată încă.</div>';
       return;
     }
 
@@ -1211,11 +1395,57 @@ function setupSuperadminExtras() {
     if (settingsMenu) settingsMenu.style.display = 'flex';
   }
 
+  // Load settings + populate dropdowns when settings tab is navigated to
+  const menuSettingsBtn = document.getElementById('menu-settings');
+  if (menuSettingsBtn) {
+    menuSettingsBtn.addEventListener('click', loadSettingsDropdowns);
+  }
+
+  // Hook up save button
+  const saveBtn = document.getElementById('save-settings-btn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async () => {
+      const guildId      = document.getElementById('settings-guild-id')?.value?.trim() || '';
+      const staffRoleId  = document.getElementById('settings-staff-role')?.value?.trim() || '';
+      const managerRoleId= document.getElementById('settings-manager-role')?.value?.trim() || '';
+      const logsChannelId= document.getElementById('settings-logs-channel')?.value?.trim() || '';
+      const setupChannelId=document.getElementById('settings-setup-channel')?.value?.trim() || '';
+
+      if (!guildId) return alert('Guild ID este obligatoriu!');
+
+      saveBtn.disabled = true;
+      saveBtn.innerText = 'Se salvează...';
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            guildId,
+            managerRoleId: staffRoleId,
+            logsChannelId,
+            setupChannelId,
+            zoneCategoryId: ''
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          window.showToast('✅ Setările au fost salvate cu succes!');
+        } else {
+          alert(data.error || 'Eroare la salvare.');
+        }
+      } catch (err) {
+        alert('Eroare rețea la salvare.');
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerText = 'Salvează Setările';
+      }
+    });
+  }
+
   // If user has no in-game profile, show a soft banner
   const db_profile_check = async () => {
     const me = await fetch('/api/me').then(r => r.json());
     if (!me.ingameName) {
-      // Show a top bar reminder
       const banner = document.createElement('div');
       banner.style.cssText = 'background:rgba(241,196,15,.12);border:1px solid rgba(241,196,15,.3);border-radius:10px;padding:12px 18px;margin-bottom:18px;display:flex;align-items:center;gap:12px;cursor:pointer;';
       banner.innerHTML = `
@@ -1233,6 +1463,63 @@ function setupSuperadminExtras() {
     }
   };
   db_profile_check();
+}
+
+async function loadSettingsDropdowns() {
+  // Load current settings first
+  try {
+    const statsRes = await fetch('/api/stats');
+    if (statsRes.ok) {
+      const stats = await statsRes.json();
+      const s = stats.settings || {};
+      if (s.guildId) document.getElementById('settings-guild-id').value = s.guildId;
+    }
+  } catch {}
+
+  // Hide loading spinners
+  const hideLoading = () => {
+    ['settings-staff-role-loading','settings-manager-role-loading','settings-logs-loading','settings-setup-loading'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+  };
+
+  try {
+    const res = await fetch('/api/discord/meta');
+    if (!res.ok) throw new Error('Acces interzis sau eroare server.');
+    const { roles, channels } = await res.json();
+
+    // Helper to populate a select
+    const fillSelect = (selectId, items, currentVal) => {
+      const sel = document.getElementById(selectId);
+      if (!sel) return;
+      sel.innerHTML = '<option value="">— Selectează —</option>';
+      items.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = item.name;
+        if (item.id === currentVal) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    };
+
+    // Load saved values for pre-selection
+    const statsRes = await fetch('/api/stats');
+    const stats = statsRes.ok ? await statsRes.json() : {};
+    const s = stats.settings || {};
+
+    fillSelect('settings-staff-role', roles, s.managerRoleId);
+    fillSelect('settings-manager-role', roles, s.managerRoleId);
+    fillSelect('settings-logs-channel', channels, s.logsChannelId);
+    fillSelect('settings-setup-channel', channels, s.setupChannelId);
+
+    hideLoading();
+  } catch (err) {
+    console.error('[Settings] Failed to load Discord meta:', err);
+    // Fall back: hide spinners and let user manually type in a text fallback
+    hideLoading();
+    window.showToast('⚠️ Nu s-au putut încărca datele Discord. Reîncearcă.');
+  }
 }
 
 // ── Ingame profile mini-modal ─────────────────────────────
@@ -1284,3 +1571,285 @@ function openIngameProfileModal() {
   }
   modal.classList.add('open');
 }
+
+// ── Faction Leaderboard Rendering ─────────────────────────
+async function renderLeaderboard() {
+  const body = document.getElementById('leaderboard-body');
+  if (!body) return;
+
+  body.innerHTML = '<tr><td colspan="6" class="empty-state" style="padding: 24px;">Se încarcă clasamentul...</td></tr>';
+
+  try {
+    const res = await fetch('/api/mafias');
+    if (!res.ok) throw new Error();
+    const factions = await res.json();
+
+    if (factions.length === 0) {
+      body.innerHTML = '<tr><td colspan="6" class="empty-state" style="padding: 24px;">Nicio facțiune înregistrată.</td></tr>';
+      return;
+    }
+
+    // Decorate score: (Completed Tasks * 10) - (Warns * 15) - (AVs * 5) + (Member Count * 2)
+    const scored = factions.map(f => {
+      const warns = f.warningsWarn || 0;
+      const avs = f.warningsAV || 0;
+      const membersCount = f.members ? f.members.length : 0;
+      
+      // Filter tasks where status is completed (done)
+      const completedTasks = f.tasks ? f.tasks.filter(t => t.completed).length : 0;
+      
+      const score = (completedTasks * 10) - (warns * 15) - (avs * 5) + (membersCount * 2);
+      
+      return { ...f, score, completedTasks, warns, avs, membersCount };
+    });
+
+    // Sort descending by score
+    scored.sort((a, b) => b.score - a.score);
+
+    body.innerHTML = scored.map((f, idx) => {
+      let typeBadge = '';
+      if (f.type === 'oficiala') typeBadge = '<span class="badge badge-leader" style="background:#ff4757;">Oficială</span>';
+      else if (f.type === 'neoficiala') typeBadge = '<span class="badge badge-leader" style="background:#70a1ff;">Neoficială</span>';
+      else if (f.type === 'gang') typeBadge = '<span class="badge badge-leader" style="background:#2ed573;">Gang</span>';
+
+      let medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1;
+
+      return `
+        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.95rem; vertical-align: middle;">
+          <td style="padding: 16px; font-weight: 900; font-size: 1.15rem; color: var(--accent-gold);">${medal}</td>
+          <td style="padding: 16px; font-weight: 700; color: #fff;">${f.name}</td>
+          <td style="padding: 16px;">${typeBadge}</td>
+          <td style="padding: 16px; text-align: center; font-weight: 700;">${f.membersCount} membri</td>
+          <td style="padding: 16px; text-align: center; color: var(--accent-red); font-weight: 700;">${f.warns}/3 WARN | ${f.avs}/2 AV</td>
+          <td style="padding: 16px; text-align: center; font-weight: 800; font-size: 1.05rem; color: var(--accent-gold);">${f.score} pct</td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error(err);
+    body.innerHTML = '<tr><td colspan="6" class="empty-state" style="padding: 24px; color: var(--accent-red);">Eroare la încărcarea clasamentului.</td></tr>';
+  }
+}
+
+// ── Faction Activities & Scheduler ─────────────────────────
+async function renderActivities() {
+  const container = document.getElementById('activities-list-container');
+  const factionSelectGroup = document.getElementById('act-faction-select-group');
+  const factionSelect = document.getElementById('act-faction-id');
+  const scheduleBtn = document.getElementById('btn-schedule-activity');
+
+  if (!container) return;
+
+  container.innerHTML = '<div class="empty-state">Se încarcă evenimentele...</div>';
+
+  // Toggle faction select for Manager
+  if (currentUser.role === 'manager' || currentUser.role === 'superadmin') {
+    if (factionSelectGroup) factionSelectGroup.style.display = 'block';
+    
+    // Populate Factions select list if empty
+    if (factionSelect && factionSelect.options.length <= 1) {
+      try {
+        const res = await fetch('/api/mafias');
+        if (res.ok) {
+          const factions = await res.json();
+          factions.forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = f.id;
+            opt.innerText = f.name;
+            factionSelect.appendChild(opt);
+          });
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  } else {
+    if (factionSelectGroup) factionSelectGroup.style.display = 'none';
+  }
+
+  // Load activities list
+  try {
+    const res = await fetch('/api/activities');
+    if (!res.ok) throw new Error();
+    const activities = await res.json();
+
+    // Filter by faction context if leader
+    let filtered = activities;
+    if (currentUser.role === 'leader') {
+      filtered = activities.filter(a => a.mafiaId === currentUser.mafiaId || !a.mafiaId);
+    }
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty-state">Niciun eveniment programat.</div>';
+    } else {
+      // Sort upcoming events first
+      filtered.sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+
+      container.innerHTML = filtered.map(a => {
+        const icons = {
+          'sedinta': '📅',
+          'antrenament': '💪',
+          'war': '⚔️',
+          'special': '⭐'
+        };
+        const icon = icons[a.type] || '📅';
+
+        // Format Date
+        let dateStr = a.dateTime;
+        try {
+          const d = new Date(a.dateTime);
+          dateStr = d.toLocaleString('ro-RO', { dateStyle: 'medium', timeStyle: 'short' });
+        } catch (e) {}
+
+        const tagColor = a.type === 'war' ? '#ff4757' : a.type === 'antrenament' ? '#2ed573' : '#f1c40f';
+
+        return `
+          <div class="member-row" style="padding: 16px; border-radius: 10px; background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.03); display: flex; flex-direction: column; align-items: flex-start; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 1.4rem;">${icon}</span>
+                <div>
+                  <div style="font-weight: 800; font-size: 1rem; color: #fff;">${a.title}</div>
+                  <div style="font-size: 0.72rem; color: var(--text-secondary);">Organizat de: <strong>${a.createdBy}</strong> pentru <strong>${a.mafiaName}</strong></div>
+                </div>
+              </div>
+              <span class="badge" style="background: ${tagColor}; border-color: ${tagColor}; font-size: 0.65rem; color: #fff; text-transform: uppercase;">${a.type}</span>
+            </div>
+            
+            <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5; margin: 4px 0;">${a.description || 'Fără detalii suplimentare.'}</p>
+            
+            <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; border-top: 1px solid rgba(255,255,255,0.03); padding-top: 8px; margin-top: 4px;">
+              <span style="font-size: 0.8rem; color: var(--accent-gold); font-weight: 700;">⏳ Data: ${dateStr}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = '<div class="empty-state">Eroare la încărcarea evenimentelor.</div>';
+  }
+
+  // Hook Schedule Button once
+  if (scheduleBtn && !scheduleBtn.dataset.hooked) {
+    scheduleBtn.dataset.hooked = 'true';
+    scheduleBtn.addEventListener('click', async () => {
+      const title = document.getElementById('act-title').value.trim();
+      const description = document.getElementById('act-desc').value.trim();
+      const type = document.getElementById('act-type').value;
+      const dateTime = document.getElementById('act-date').value;
+      const targetFactionId = factionSelect ? factionSelect.value : '';
+
+      if (!title || !dateTime) {
+        return alert('Titlul și Data/Ora sunt obligatorii!');
+      }
+
+      window.showToast('Trimitere eveniment pe Discord...');
+
+      try {
+        const response = await fetch('/api/activities', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ title, description, type, dateTime, targetFactionId })
+        });
+
+        const resData = await response.json();
+        if (response.ok && resData.success) {
+          window.showToast('✅ Eveniment programat și trimis pe Discord!');
+          // Clear inputs
+          document.getElementById('act-title').value = '';
+          document.getElementById('act-desc').value = '';
+          document.getElementById('act-date').value = '';
+          renderActivities();
+        } else {
+          alert(resData.error || 'Trimiterea a eșuat.');
+        }
+      } catch (err) {
+        alert('Eroare la programare.');
+      }
+    });
+  }
+}
+
+// ── Dashboard Support Ticket Handler ──────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Listen for clicks on dashboard staff cards
+  document.addEventListener('click', (e) => {
+    const card = e.target.closest('.dashboard-staff-card');
+    if (!card) return;
+
+    const id = card.getAttribute('data-id');
+    const name = card.getAttribute('data-name');
+    if (!id || !name) return;
+
+    // Auto-fill admin destination
+    document.getElementById('db-support-admin-id').value = id;
+    document.getElementById('db-support-admin-name').value = name;
+    document.getElementById('db-support-details').value = '';
+
+    // Auto-fill logged-in user info (from session - no manual input needed)
+    const userName = currentUser ? (currentUser.nickname || currentUser.username || 'Utilizator') : 'Utilizator';
+    const userId = currentUser ? currentUser.id : '';
+    document.getElementById('db-support-user-name').value = userName;
+    document.getElementById('db-support-user-id').value = userId;
+    const fromDisplay = document.getElementById('db-support-from-display');
+    if (fromDisplay) fromDisplay.value = `${userName} (${userId})`;
+    
+    document.getElementById('dashboard-support-modal').classList.add('open');
+  });
+
+  // Close modal
+  const closeBtn = document.getElementById('db-support-close');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      document.getElementById('dashboard-support-modal').classList.remove('open');
+    });
+  }
+
+  // Submit ticket
+  const submitBtn = document.getElementById('db-support-submit-btn');
+  if (submitBtn) {
+    submitBtn.addEventListener('click', async () => {
+      const adminId = document.getElementById('db-support-admin-id').value;
+      const adminName = document.getElementById('db-support-admin-name').value;
+      const type = document.getElementById('db-support-type').value;
+      const details = document.getElementById('db-support-details').value.trim();
+
+      if (!details) {
+        return alert('Te rugăm să completezi detaliile problemei.');
+      }
+
+      // Auto-fill user credentials from hidden fields (set when modal opened)
+      const userName = document.getElementById('db-support-user-name')?.value
+                    || (currentUser ? (currentUser.nickname || currentUser.username) : 'Utilizator');
+      const userId   = document.getElementById('db-support-user-id')?.value
+                    || (currentUser ? currentUser.id : '');
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Se trimite...';
+
+      try {
+        const res = await fetch('/api/support/ticket', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ adminId, adminName, type, userName, userId, details })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          window.showToast(`✅ Tichetul a fost trimis în privat către ${adminName}!`);
+          document.getElementById('dashboard-support-modal').classList.remove('open');
+        } else {
+          alert(data.error || 'Trimiterea tichetului a eșuat.');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Eroare rețea la trimiterea tichetului.');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Trimite Tichet';
+      }
+    });
+  }
+});
