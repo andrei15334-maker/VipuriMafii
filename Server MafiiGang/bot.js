@@ -1083,9 +1083,10 @@ client.on('interactionCreate', async (interaction) => {
       }
       
       // ─── Show in-game verification modal before joining ───
+      const modalTitle = `🎮 Alăturare — ${mafia.name}`.slice(0, 45);
       const joinModal = new ModalBuilder()
         .setCustomId(`modal_join_verify_${mafiaId}`)
-        .setTitle(`🎮 Verificare Identitate — ${mafia.name}`);
+        .setTitle(modalTitle);
 
       const nameInput = new TextInputBuilder()
         .setCustomId('ingame_name')
@@ -1297,14 +1298,14 @@ client.on('interactionCreate', async (interaction) => {
               { name: 'Jucător Discord', value: `<@${interaction.user.id}>`, inline: true },
               { name: 'Facțiune', value: mafia.name, inline: true },
               { name: 'Nume In-Game', value: ingameName, inline: true },
-              { name: 'ID CFX', value: cfxId, inline: true }
+              { name: 'ID FiveM', value: fivemId, inline: true }
             )
             .setTimestamp();
           await logChannel.send({ embeds: [logEmbed] });
         }
 
         await interaction.editReply({
-          content: `✅ Te-ai alăturat mafiei **${mafia.name}**!\n🎮 Profil înregistrat: **${ingameName}** (CFX: ${cfxId})\nNickname-ul tău pe Discord a fost actualizat automat.`
+          content: `✅ Te-ai alăturat mafiei **${mafia.name}**!\n🎮 Profil înregistrat: **${ingameName}** (ID: ${fivemId})\nNickname-ul tău pe Discord a fost actualizat automat.`
         });
       } catch (err) {
         console.error('[DISCORD] Eroare la join + verificare:', err);
