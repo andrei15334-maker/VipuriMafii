@@ -1,7 +1,24 @@
 const fs = require('fs');
 const path = require('path');
 
-const dbPath = path.join(__dirname, 'database.json');
+const dbPathLocal = path.join(__dirname, 'database.json');
+let dbPath = dbPathLocal;
+
+// On Render, if a persistent disk is mounted at /data, use it and migrate local DB on first boot
+const persistentDir = '/data';
+const persistentDbPath = '/data/database.json';
+
+if (fs.existsSync(persistentDir)) {
+  dbPath = persistentDbPath;
+  if (!fs.existsSync(persistentDbPath) && fs.existsSync(dbPathLocal)) {
+    try {
+      fs.copyFileSync(dbPathLocal, persistentDbPath);
+      console.log('[DATABASE] Successfully migrated local database.json to persistent disk at /data/database.json');
+    } catch (err) {
+      console.error('[DATABASE] Failed to copy local database to persistent disk:', err.message);
+    }
+  }
+}
 
 function readDb() {
   try {
