@@ -80,21 +80,33 @@ function applyRoleBasedUI() {
   const menuSettings     = document.getElementById('menu-settings');       // tab-settings
 
   // === MEMBER ===
-  // Poate vedea: Overview, Toate Factiunile, Jucatori Online
-  // NU poate vedea: Gestionare Factiuni, Loguri, Setari
+  // Poate vedea: Facțiunea Mea (tab-factions), Toate Factiunile, Jucatori Online
+  // NU poate vedea: Loguri, Setari, Ședințe & Activități
   if (role === 'member') {
-    if (menuFactions)    menuFactions.style.display    = 'none';
+    if (menuFactions) {
+      menuFactions.style.display = 'block';
+      const textSpan = menuFactions.querySelector('.nav-text');
+      if (textSpan) textSpan.innerText = 'Facțiunea Mea';
+    }
     if (menuLogs)        menuLogs.style.display        = 'none';
     if (menuSettings)    menuSettings.style.display    = 'none';
-    // Start on Overview tab instead of Factions
-    activateTab('tab-overview');
+    
+    const menuActivities = document.getElementById('menu-activities');
+    if (menuActivities) menuActivities.style.display = 'none';
+
+    // Start on Factions (My Faction) tab
+    activateTab('tab-factions');
     return;
   }
 
   // === LEADER ===
-  // Poate vedea: Overview, Gestionare Factiuni (propria factiune), Toate Factiunile, Jucatori Online
+  // Poate vedea: Facțiunea Mea (tab-factions), Toate Factiunile, Jucatori Online, Ședințe
   // NU poate vedea: Loguri, Setari
   if (role === 'leader') {
+    if (menuFactions) {
+      const textSpan = menuFactions.querySelector('.nav-text');
+      if (textSpan) textSpan.innerText = 'Facțiunea Mea';
+    }
     if (menuLogs)        menuLogs.style.display        = 'none';
     if (menuSettings)    menuSettings.style.display    = 'none';
     return;
@@ -171,7 +183,7 @@ function setupNavigation() {
       const role  = currentUser?.role;
 
       // Guard restricted tabs
-      const restrictedForMember = ['tab-factions', 'tab-logs', 'tab-settings'];
+      const restrictedForMember = ['tab-activities', 'tab-logs', 'tab-settings'];
       const restrictedForLeader = ['tab-logs', 'tab-settings'];
       const restrictedForManager= ['tab-settings'];
 
