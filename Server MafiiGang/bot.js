@@ -1661,7 +1661,14 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.editReply({ embeds: [embed] });
       } catch (err) {
         console.error('[SHOW MEMBERS ERROR]', err);
-        await interaction.editReply({ content: '❌ Eroare la citirea membrilor din Discord.' });
+        // Safely try to reply - deferReply might have failed (expired interaction 10062)
+        try {
+          if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({ content: '❌ Eroare la citirea membrilor din Discord.' });
+          } else {
+            await interaction.reply({ content: '❌ Eroare la citirea membrilor din Discord.', ephemeral: true });
+          }
+        } catch (_) { /* ignore if interaction already expired */ }
       }
     }
 
